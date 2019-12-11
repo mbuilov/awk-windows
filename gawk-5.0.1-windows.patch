@@ -1,0 +1,3149 @@
+--- orig/gawk-5.0.1/awk.h	2019-06-17 09:04:54.000000000 +0300
++++ gawk-5.0.1/awk.h	2019-12-11 12:34:52.567443900 +0300
+@@ -47,6 +47,10 @@
+ #define _XOPEN_SOURCE_EXTENDED 1
+ #endif
+ 
++#ifdef _MSC_VER
++#include <io.h>
++#endif
++
+ #include <stdio.h>
+ #include <assert.h>
+ #include <limits.h>
+@@ -63,7 +67,7 @@
+ #endif /* LOCALEDIR */
+ #endif
+ 
+-#if !defined(__SUNPRO_C)
++#if !defined(__SUNPRO_C) && !defined(_MSC_VER)
+ #if !defined(__STDC__) || __STDC__ < 1
+ #error "gawk no longer supports non-C89 environments (no __STDC__ or __STDC__ < 1)"
+ #endif
+@@ -170,15 +174,16 @@
+ #define fwrite	fwrite_unlocked
+ #endif /* HAVE_FWRITE_UNLOCKED */
+ 
+-#if defined(__DJGPP__) || defined(__EMX__) || defined(__MINGW32__)
++#if defined(__DJGPP__) || defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
+ #include "nonposix.h"
+-#endif /* defined(__DJGPP__) || defined(__EMX__) || defined(__MINGW32__) */
++#endif /* defined(__DJGPP__) || defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER) */
+ 
+ /* use this as lintwarn("...")
+    this is a hack but it gives us the right semantics */
+ #define lintwarn (*(set_loc(__FILE__, __LINE__),lintfunc))
+ /* same thing for warning */
+-#define warning (*(set_loc(__FILE__, __LINE__),r_warning))
++/* don't define 'warning' under _MSC_VER - to avoid errors compiling '#pragma warning(push)' */
++#define awk_warning (*(set_loc(__FILE__, __LINE__),r_warning))
+ 
+ #ifdef HAVE_MPFR
+ #include <gmp.h>
+@@ -473,7 +478,7 @@
+ #define rnode	sub.nodep.r.rptr
+ 
+ /* Node_param_list */
+-#define param      vname
++#define awk_param      vname
+ #define dup_ent    sub.nodep.r.rptr
+ 
+ /* Node_param_list, Node_func */
+@@ -2068,10 +2073,10 @@
+ #else
+ #define ignore_sigpipe()
+ #define set_sigpipe_to_default()
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ /* 0xC0000008 is EXCEPTION_INVALID_HANDLE, somewhat appropriate for EPIPE */
+ #define die_via_sigpipe() exit(0xC0000008)
+-#else  /* !__MINGW32__ */
++#else  /* !__MINGW32__ && !_MSC_VER */
+ #define die_via_sigpipe() exit(EXIT_FATAL)
+-#endif	/* !__MINGW32__ */
++#endif	/* !__MINGW32__ && !_MSC_VER */
+ #endif
+--- orig/gawk-5.0.1/awkgram.c	2019-06-18 20:09:33.000000000 +0300
++++ gawk-5.0.1/awkgram.c	2019-12-11 14:53:23.937693200 +0300
+@@ -2527,7 +2527,7 @@
+ 		}
+ 
+ 		if (case_values != NULL)
+-			efree(case_values);
++			efree((void*)case_values);
+ 
+ 		ip = yyvsp[-6];
+ 		if (do_pretty_print) {
+@@ -5507,7 +5507,7 @@
+ 
+ 		/* If necessary, one day, test value for different functions.  */
+ 		if (cp == NULL)
+-			closefunc = close;
++			closefunc = _close;
+ 		else
+ 			closefunc = one_line_close;
+ 	}
+@@ -6381,7 +6381,7 @@
+ 					if (do_lint)
+ 						lintwarn(_("POSIX does not allow operator `**='"));
+ 					if (do_lint_old)
+-						warning(_("old awk does not support operator `**='"));
++						awk_warning(_("old awk does not support operator `**='"));
+ 				}
+ 				yylval = GET_INSTRUCTION(Op_assign_exp);
+ 				return ASSIGNOP;
+@@ -6392,7 +6392,7 @@
+ 					if (do_lint)
+ 						lintwarn(_("POSIX does not allow operator `**'"));
+ 					if (do_lint_old)
+-						warning(_("old awk does not support operator `**'"));
++						awk_warning(_("old awk does not support operator `**'"));
+ 				}
+ 				yylval = GET_INSTRUCTION(Op_exp);
+ 				return lasttok = '^';
+@@ -6427,7 +6427,7 @@
+ 		if (nextc(true) == '=') {
+ 			if (do_lint_old && ! did_warn_assgn) {
+ 				did_warn_assgn = true;
+-				warning(_("operator `^=' is not supported in old awk"));
++				awk_warning(_("operator `^=' is not supported in old awk"));
+ 			}
+ 			yylval = GET_INSTRUCTION(Op_assign_exp);
+ 			return lasttok = ASSIGNOP;
+@@ -6435,7 +6435,7 @@
+ 		pushback();
+ 		if (do_lint_old && ! did_warn_op) {
+ 			did_warn_op = true;
+-			warning(_("operator `^' is not supported in old awk"));
++			awk_warning(_("operator `^' is not supported in old awk"));
+ 		}
+ 		yylval = GET_INSTRUCTION(Op_exp);
+ 		return lasttok = '^';
+@@ -6890,7 +6890,7 @@
+ 		if (do_lint_old && (tokentab[mid].flags & NOT_OLD) != 0
+ 				 && (warntab[mid] & NOT_OLD) == 0
+ 		) {
+-			warning(_("`%s' is not supported in old awk"),
++			awk_warning(_("`%s' is not supported in old awk"),
+ 					tokentab[mid].operator);
+ 			warntab[mid] |= NOT_OLD;
+ 		}
+@@ -7273,7 +7273,7 @@
+ 		NODE *str = subn->nexti->lasti->memory;
+ 
+ 		if ((str->flags & INTLSTR) != 0)
+-			warning(_("use of dcgettext(_\"...\") is incorrect: remove leading underscore"));
++			awk_warning(_("use of dcgettext(_\"...\") is incorrect: remove leading underscore"));
+ 			/* don't dump it, the lexer already did */
+ 		else
+ 			dumpintlstr(str->stptr, str->stlen);
+@@ -7288,7 +7288,7 @@
+ 		NODE *str2 = subn->nexti->lasti->nexti->lasti->memory;
+ 
+ 		if (((str1->flags | str2->flags) & INTLSTR) != 0)
+-			warning(_("use of dcngettext(_\"...\") is incorrect: remove leading underscore"));
++			awk_warning(_("use of dcngettext(_\"...\") is incorrect: remove leading underscore"));
+ 		else
+ 			dumpintlstr2(str1->stptr, str1->stlen, str2->stptr, str2->stlen);
+ 	} else if (r->builtin == do_asort || r->builtin == do_asorti) {
+@@ -7354,14 +7354,14 @@
+ 	source = pc->source_file;
+ 	sourceline = pc->source_line;
+ 	/*
+-	 * Use warning() and not lintwarn() so that can warn
++	 * Use awk_warning() and not lintwarn() so that can warn
+ 	 * about all shadowed parameters.
+ 	 */
+ 	for (i = 0; i < pcount; i++) {
+-		if (lookup(fp[i].param) != NULL) {
+-			warning(
++		if (lookup(fp[i].awk_param) != NULL) {
++			awk_warning(
+ 	_("function `%s': parameter `%s' shadows global variable"),
+-					fname, fp[i].param);
++					fname, fp[i].awk_param);
+ 			ret = true;
+ 		}
+ 	}
+@@ -7409,8 +7409,8 @@
+ 	else if (strcmp(fname, "-") == 0)
+ 		fp = stdout;
+ 	else if ((fp = fopen(fname, "w")) == NULL) {
+-		warning(_("could not open `%s' for writing (%s)"), fname, strerror(errno));
+-		warning(_("sending variable list to standard error"));
++		awk_warning(_("could not open `%s' for writing (%s)"), fname, strerror(errno));
++		awk_warning(_("sending variable list to standard error"));
+ 		fp = stderr;
+ 	}
+ 
+@@ -7418,7 +7418,7 @@
+ 	print_vars(vars, fprintf, fp);
+ 	efree(vars);
+ 	if (fp != stdout && fp != stderr && fclose(fp) != 0)
+-		warning(_("%s: close failed (%s)"), fname, strerror(errno));
++		awk_warning(_("%s: close failed (%s)"), fname, strerror(errno));
+ }
+ 
+ /* dump_funcs --- print all functions */
+--- orig/gawk-5.0.1/builtin.c	2019-05-22 21:00:52.000000000 +0300
++++ gawk-5.0.1/builtin.c	2019-12-11 12:34:52.578444500 +0300
+@@ -128,7 +128,7 @@
+ 	return;
+ 
+ wrerror:
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	if (errno == 0 || errno == EINVAL)
+ 		w32_maybe_set_errno();
+ #endif
+@@ -165,7 +165,7 @@
+ 	errno = 0;
+ 	res = exp(d);
+ 	if (errno == ERANGE)
+-		warning(_("exp: argument %g is out of range"), d);
++		awk_warning(_("exp: argument %g is out of range"), d);
+ 	return make_number((AWKNUM) res);
+ }
+ 
+@@ -242,10 +242,10 @@
+ 	if (rp != NULL) {
+ 		if ((rp->flag & (RED_WRITE|RED_APPEND)) == 0) {
+ 			if ((rp->flag & RED_PIPE) != 0)
+-				warning(_("fflush: cannot flush: pipe `%.*s' opened for reading, not writing"),
++				awk_warning(_("fflush: cannot flush: pipe `%.*s' opened for reading, not writing"),
+ 					len, file);
+ 			else
+-				warning(_("fflush: cannot flush: file `%.*s' opened for reading, not writing"),
++				awk_warning(_("fflush: cannot flush: file `%.*s' opened for reading, not writing"),
+ 					len, file);
+ 			DEREF(tmp);
+ 			return make_number((AWKNUM) status);
+@@ -261,13 +261,13 @@
+ 				update_ERRNO_int(errno);
+ 			}
+ 		} else if ((rp->flag & RED_TWOWAY) != 0)
+-				warning(_("fflush: cannot flush: two-way pipe `%.*s' has closed write end"),
++				awk_warning(_("fflush: cannot flush: two-way pipe `%.*s' has closed write end"),
+ 					len, file);
+ 	} else if ((fp = stdfile(tmp->stptr, tmp->stlen)) != NULL) {
+ 		status = (non_fatal_flush_std_file(fp) == false);
+ 	} else {
+ 		status = -1;
+-		warning(_("fflush: `%.*s' is not an open file, pipe or co-process"), len, file);
++		awk_warning(_("fflush: `%.*s' is not an open file, pipe or co-process"), len, file);
+ 	}
+ 	DEREF(tmp);
+ 	return make_number((AWKNUM) status);
+@@ -582,7 +582,7 @@
+ 		lintwarn(_("log: received non-numeric argument"));
+ 	arg = force_number(tmp)->numbr;
+ 	if (arg < 0.0)
+-		warning(_("log: received negative argument %g"), arg);
++		awk_warning(_("log: received negative argument %g"), arg);
+ 	d = log(arg);
+ 	DEREF(tmp);
+ 	return make_number((AWKNUM) d);
+@@ -1796,7 +1796,7 @@
+ 	arg = (double) force_number(tmp)->numbr;
+ 	DEREF(tmp);
+ 	if (arg < 0.0)
+-		warning(_("sqrt: called with negative argument %g"), arg);
++		awk_warning(_("sqrt: called with negative argument %g"), arg);
+ 	return make_number((AWKNUM) sqrt(arg));
+ }
+ 
+@@ -2201,7 +2201,7 @@
+ 			if (do_posix)
+ 				;	/* leave it alone, full 16 bits */
+ 			else if (do_traditional)
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 				ret = (((unsigned)status) & ~0xC0000000);
+ #else
+ 				ret = (status / 256.0);
+@@ -2916,7 +2916,7 @@
+ 				how_many = LONG_MAX;
+ 			if (d <= 0) {
+ 				(void) force_string(glob_flag);
+-				warning(_("gensub: third argument `%.*s' treated as 1"),
++				awk_warning(_("gensub: third argument `%.*s' treated as 1"),
+ 						(int) glob_flag->stlen,
+ 						glob_flag->stptr);
+ 			}
+@@ -4079,7 +4079,7 @@
+ 			/* fall through */
+ 		default:
+ 			if (res == NULL) {
+-				warning(_("typeof detected invalid flags combination `%s'; please file a bug report."), flags2str(arg->flags));
++				awk_warning(_("typeof detected invalid flags combination `%s'; please file a bug report."), flags2str(arg->flags));
+ 				res = "unknown";
+ 			}
+ 			break;
+--- orig/gawk-5.0.1/cint_array.c	2019-05-06 21:29:59.000000000 +0300
++++ gawk-5.0.1/cint_array.c	2019-12-11 12:34:52.580444700 +0300
+@@ -1286,8 +1286,8 @@
+ 
+ 		// further checks
+ 		if (! badvar) {
+-			char *cp = strchr(arg, ':');
+-			if (cp && (cp[1] != ':' || strchr(cp + 2, ':') != NULL))
++			char *const cp1 = strchr(arg, ':');
++			if (cp1 && (cp1[1] != ':' || strchr(cp1 + 2, ':') != NULL))
+ 				badvar = true;
+ 		}
+ 		*cp = '=';	// restore the '='
+--- orig/gawk-5.0.1/debug.c	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/debug.c	2019-12-11 12:34:52.582444800 +0300
+@@ -30,7 +30,7 @@
+ #include <fcntl.h>	/* open() */
+ #endif
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define execvp(p,a) w32_execvp(p,a)
+ int w32_execvp(const char *, char **);
+ #endif
+@@ -852,7 +852,7 @@
+ 			r = f->stack[i];
+ 			if (r->type == Node_array_ref)
+ 				r = r->orig_array;
+-			fprintf(out_fp, "%s = ", func->fparms[i].param);
++			fprintf(out_fp, "%s = ", func->fparms[i].awk_param);
+ 			print_symbol(r, true);
+ 		}
+ 		if (to < from)
+@@ -1011,7 +1011,7 @@
+ 		func = f->func_node;
+ 		pcount = func->param_cnt;
+ 		for (i = 0; i < pcount; i++) {
+-			fparam = func->fparms[i].param;
++			fparam = func->fparms[i].awk_param;
+ 			if (strcmp(name, fparam) == 0) {
+ 				r = f->stack[i];
+ 				if (r->type == Node_array_ref)
+@@ -1908,7 +1908,7 @@
+ 
+ 	print_func(fp, "%s(", func->vname);
+ 	for (i = 0; i < pcount; i++) {
+-		print_func(fp, "%s", func->fparms[i].param);
++		print_func(fp, "%s", func->fparms[i].awk_param);
+ 		if (i < pcount - 1)
+ 			print_func(fp, ", ");
+ 	}
+@@ -3733,7 +3733,7 @@
+ 
+ 	case Node_param_list:
+ 		assert(func != NULL);
+-		print_func(fp, "%s", func->fparms[m->param_cnt].param);
++		print_func(fp, "%s", func->fparms[m->param_cnt].awk_param);
+ 		break;
+ 
+ 	case Node_var:
+@@ -3770,7 +3770,7 @@
+ 			int j;
+ 			print_func(fp, "\n\t# Function: %s (", func->vname);
+ 			for (j = 0; j < pcount; j++) {
+-				print_func(fp, "%s", func->fparms[j].param);
++				print_func(fp, "%s", func->fparms[j].awk_param);
+ 				if (j < pcount - 1)
+ 					print_func(fp, ", ");
+ 			}
+@@ -3979,7 +3979,7 @@
+ 	case Op_arrayfor_incr:
+ 		print_func(fp, "[array_var = %s] [target_jmp = %p]\n",
+ 		                pc->array_var->type == Node_param_list ?
+-		                   func->fparms[pc->array_var->param_cnt].param : pc->array_var->vname,
++		                   func->fparms[pc->array_var->param_cnt].awk_param : pc->array_var->vname,
+ 		                pc->target_jmp);
+ 		break;
+ 
+@@ -5653,7 +5653,7 @@
+ 				*sp++ = r;
+ 				/* local variable */
+ 				r->type = Node_var_new;
+-				r->vname = np->param;
++				r->vname = np->awk_param;
+ 			}
+ 
+ 			this_func->param_cnt += ecount;
+--- orig/gawk-5.0.1/eval.c	2019-05-22 21:00:52.000000000 +0300
++++ gawk-5.0.1/eval.c	2019-12-11 12:34:52.584444900 +0300
+@@ -977,9 +977,9 @@
+ 			do_flags |= DO_LINT_ALL;
+ 	}
+ 
+-	/* explicitly use warning() here, in case lintfunc == r_fatal */
++	/* explicitly use awk_warning() here, in case lintfunc == r_fatal */
+ 	if (old_lint != do_lint && old_lint && ! do_lint)
+-		warning(_("turning off `--lint' due to assignment to `LINT'"));
++		awk_warning(_("turning off `--lint' due to assignment to `LINT'"));
+ 
+ 	/* inform plug-in api of change */
+ 	update_ext_api();
+@@ -1274,7 +1274,7 @@
+ 
+ 	/* check for extra args */
+ 	if (arg_count > pcount) {
+-		warning(
++		awk_warning(
+ 			_("function `%s' called with more arguments than declared"),
+        			f->vname);
+ 		do {
+@@ -1292,7 +1292,7 @@
+ 		if (i >= arg_count) {
+ 			/* local variable */
+ 			r->type = Node_var_new;
+-			r->vname = fp[i].param;
++			r->vname = fp[i].awk_param;
+ 			continue;
+ 		}
+ 
+@@ -1337,7 +1337,7 @@
+ 		default:
+ 			cant_happen();
+ 		}
+-		r->vname = fp[i].param;
++		r->vname = fp[i].awk_param;
+ 	}
+ 
+ 	stack_adj(-arg_count);	/* adjust stack pointer */
+--- orig/gawk-5.0.1/ext.c	2019-05-05 20:35:20.000000000 +0300
++++ gawk-5.0.1/ext.c	2019-12-11 12:34:52.586445000 +0300
+@@ -73,7 +73,7 @@
+ 				lib_name, INIT_FUNC, dlerror());
+ 
+ 	if (install_func(& api_impl, NULL /* ext_id */) == 0)
+-		warning(_("load_ext: library `%s' initialization routine `%s' failed"),
++		awk_warning(_("load_ext: library `%s' initialization routine `%s' failed"),
+ 				lib_name, INIT_FUNC);
+ }
+ 
+--- orig/gawk-5.0.1/extension/filefuncs.c	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/extension/filefuncs.c	2019-12-11 12:34:52.587445100 +0300
+@@ -105,7 +105,7 @@
+ #define readlink(f,b,bs) (-1)
+ #endif
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define S_IRGRP S_IRUSR
+ #define S_IWGRP S_IWUSR
+ #define S_IXGRP S_IXUSR
+@@ -325,7 +325,7 @@
+ #elif defined _AIX && defined _I386
+ 	/* AIX PS/2 counts st_blocks in 4K units.  */
+ 	return 4 * 1024;
+-#elif defined __MINGW32__
++#elif defined __MINGW32__ || defined _MSC_VER
+ 	return 1024;
+ #else
+ 	return 512;
+@@ -392,7 +392,7 @@
+ 	/* fill in the array */
+ 	array_set(array, "name", make_const_string(name, strlen(name), & tmp));
+ 	array_set_numeric(array, "dev", sbuf->st_dev);
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	array_set_numeric(array, "ino", (double)get_inode (name));
+ #else
+ 	array_set_numeric(array, "ino", sbuf->st_ino);
+@@ -402,7 +402,7 @@
+ 	array_set_numeric(array, "uid", sbuf->st_uid);
+ 	array_set_numeric(array, "gid", sbuf->st_gid);
+ 	array_set_numeric(array, "size", sbuf->st_size);
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	array_set_numeric(array, "blocks", (sbuf->st_size + 4095) / 4096);
+ #else
+ 	array_set_numeric(array, "blocks", sbuf->st_blocks);
+@@ -420,7 +420,7 @@
+ 
+ #ifdef HAVE_STRUCT_STAT_ST_BLKSIZE
+ 	array_set_numeric(array, "blksize", sbuf->st_blksize);
+-#elif defined(__MINGW32__)
++#elif defined(__MINGW32__) || defined(_MSC_VER)
+ 	array_set_numeric(array, "blksize", 4096);
+ #endif /* HAVE_STRUCT_STAT_ST_BLKSIZE */
+ 
+@@ -562,7 +562,7 @@
+ 	int i;
+ 	awk_value_t value;
+ 
+-#ifndef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	/* at least right now, only FTS needs initializing */
+ 	static struct flagtab {
+ 		const char *name;
+@@ -591,7 +591,7 @@
+ 	return errors == 0;
+ }
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ /*  do_fts --- walk a hierarchy and fill in an array */
+ 
+ /*
+@@ -608,7 +608,7 @@
+ 	return NULL;	/* for the compiler */
+ }
+ 
+-#else /* __MINGW32__ */
++#else /* ! __MINGW32__ && ! _MSC_VER */
+ 
+ static int fts_errors = 0;
+ 
+@@ -916,12 +916,12 @@
+ 
+ 	return make_number(ret, result);
+ }
+-#endif	/* ! __MINGW32__ */
++#endif	/* ! __MINGW32__ && ! _MSC_VER */
+ 
+ static awk_ext_func_t func_table[] = {
+ 	{ "chdir",	do_chdir, 1, 1, awk_false, NULL },
+ 	{ "stat",	do_stat, 3, 2, awk_false, NULL },
+-#ifndef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	{ "fts",	do_fts, 3, 3, awk_false, NULL },
+ #endif
+ #if defined(HAVE_SYS_STATVFS_H) && defined(HAVE_STATVFS)
+--- orig/gawk-5.0.1/extension/gawkdirfd.h	2017-12-14 20:53:45.000000000 +0300
++++ gawk-5.0.1/extension/gawkdirfd.h	2019-12-11 12:34:52.589445200 +0300
+@@ -45,7 +45,7 @@
+ # define DIR_TO_FD(d) (FAKE_FD_VALUE)
+ #endif
+ 
+-#if !defined(HAVE_DIRFD) && (!defined(HAVE_DECL_DIRFD) || HAVE_DECL_DIRFD == 0)
++#if !defined(HAVE_DIRFD) && (!defined(HAVE_DECL_DIRFD) || HAVE_DECL_DIRFD == 0) && !defined(_MSC_VER)
+ int
+ dirfd (DIR *dir_p)
+ {
+--- orig/gawk-5.0.1/extension/inplace.c	2019-04-12 12:46:18.000000000 +0300
++++ gawk-5.0.1/extension/inplace.c	2019-12-11 12:34:52.590445200 +0300
+@@ -40,7 +40,12 @@
+ #include <fcntl.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifdef _MSC_VER
++#include <io.h>
++#else
+ #include <unistd.h>
++#endif
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -55,7 +60,13 @@
+ #define	S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+ #endif
+ 
+-#ifdef __MINGW32__
++#ifdef _MSC_VER
++#ifndef STDOUT_FILENO
++#define STDOUT_FILENO fileno(stdout)
++#endif
++#endif
++
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ # define chown(x,y,z)  (0)
+ # define link(f1,f2)   rename(f1,f2)
+ int
+@@ -249,7 +260,7 @@
+ 		gawk_free(bakname);
+ 	}
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	unlink(filename.str_value.str);
+ #endif
+ 
+--- orig/gawk-5.0.1/extension/intdiv.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/extension/intdiv.c	2019-12-11 12:34:52.591445300 +0300
+@@ -31,7 +31,6 @@
+ #include <assert.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <unistd.h>
+ #include <math.h>
+ 
+ #include <sys/types.h>
+--- orig/gawk-5.0.1/extension/ordchr.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/extension/ordchr.c	2019-12-11 12:34:52.592445300 +0300
+@@ -38,7 +38,6 @@
+ #include <assert.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <unistd.h>
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+--- orig/gawk-5.0.1/extension/readdir.c	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/extension/readdir.c	2019-12-11 13:24:12.198118800 +0300
+@@ -8,6 +8,10 @@
+  * Andrew Schorr and Arnold Robbins: further fixes 8/2012.
+  * Simplified 11/2012.
+  * Improved 3/2019.
++ *
++ * Michael M. Builov: ported to _MSC_VER.
++ * mbuilov@gmail.com
++ * Ported 12/2019
+  */
+ 
+ /*
+@@ -40,7 +44,10 @@
+ #include <errno.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifndef _MSC_VER
+ #include <unistd.h>
++#endif
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -51,11 +58,11 @@
+ 
+ #ifdef HAVE_DIRENT_H
+ #include <dirent.h>
+-#else
++#elif ! defined _MSC_VER
+ #error Cannot compile the readdir extension on this system!
+ #endif
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+ #endif
+@@ -84,10 +91,14 @@
+ /* data type for the opaque pointer: */
+ 
+ typedef struct open_directory {
++#ifndef _MSC_VER
+ 	DIR *dp;
++#endif
+ 	char *buf;
+ } open_directory_t;
+ 
++#ifndef _MSC_VER
++
+ /* ftype --- return type of file as a single character string */
+ 
+ static const char *
+@@ -145,13 +156,16 @@
+ 	char fname[PATH_MAX];
+ 	HANDLE fh;
+ 	BY_HANDLE_FILE_INFORMATION info;
++	BOOL ok;
+ 
+ 	sprintf(fname, "%s\\%s", dirname, entry->d_name);
+ 	fh = CreateFile(fname, 0, 0, NULL, OPEN_EXISTING,
+ 			FILE_FLAG_BACKUP_SEMANTICS, NULL);
+ 	if (fh == INVALID_HANDLE_VALUE)
+ 		return 0;
+-	if (GetFileInformationByHandle(fh, &info)) {
++	ok = GetFileInformationByHandle(fh, &info);
++	CloseHandle(fh);
++	if (ok) {
+ 		long long inode = info.nFileIndexHigh;
+ 
+ 		inode <<= 32;
+@@ -165,6 +179,75 @@
+ #endif
+ }
+ 
++#else /* _MSC_VER */
++
++/* ftype_and_ino:
++  --- return type of file as a single character string,
++  --- get the inode of a file */
++static const char *
++ftype_and_ino(
++	const WIN32_FIND_DATA *ffd,
++	const char *dirname,
++	unsigned long long *inode/*out*/)
++{
++	HANDLE fh;
++	char fname[2*MAX_PATH];
++
++	unsigned long long ino = 0; /* zero - in case of error */
++	const char *ftstr = "u"; /* unknown - in case of error */
++
++	if (ffd->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
++		ftstr = "l";
++	else if (ffd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
++		ftstr = "d";
++
++	sprintf(fname, "%s\\%s", dirname, ffd->cFileName);
++
++	fh = CreateFile(fname, 0, 0, NULL, OPEN_EXISTING,
++			((ffd->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
++				? FILE_FLAG_OPEN_REPARSE_POINT : 0) |
++			FILE_FLAG_BACKUP_SEMANTICS, NULL);
++
++	if (fh != INVALID_HANDLE_VALUE) {
++
++		BY_HANDLE_FILE_INFORMATION info;
++
++		if (GetFileInformationByHandle(fh, &info)) {
++			ino = info.nFileIndexHigh;
++			ino <<= 32;
++			ino += info.nFileIndexLow;
++		}
++
++		if ('u' == *ftstr) {
++			const DWORD ft = GetFileType(fh);
++
++			switch (ft) {
++				case FILE_TYPE_DISK:
++					ftstr = "f";
++					break;
++				case FILE_TYPE_CHAR:
++					ftstr = "c";
++					break;
++				case FILE_TYPE_PIPE:
++					if (GetNamedPipeInfo(fh, NULL, NULL, NULL, NULL))
++						ftstr = "p";
++					else
++						ftstr = "s";
++					break;
++				default:
++					break;
++			}
++		}
++
++		CloseHandle(fh);
++	}
++
++	*inode = ino;
++	return ftstr;
++}
++
++#endif /* _MSC_VER */
++
+ /* dir_get_record --- get one record at a time out of a directory */
+ 
+ static int
+@@ -172,8 +255,13 @@
+ 		char **rt_start, size_t *rt_len,
+ 		const awk_fieldwidth_info_t **unused)
+ {
++#ifndef _MSC_VER
+ 	DIR *dp;
+ 	struct dirent *dirent;
++#else
++	WIN32_FIND_DATA *ffd;
++#endif
++	char *out_buf;
+ 	int len;
+ 	open_directory_t *the_dir;
+ 	const char *ftstr;
+@@ -188,7 +276,13 @@
+ 		return EOF;
+ 
+ 	the_dir = (open_directory_t *) iobuf->opaque;
++#ifndef _MSC_VER
+ 	dp = the_dir->dp;
++#else
++	ffd = (WIN32_FIND_DATA*)the_dir->buf;
++#endif
++
++#ifndef _MSC_VER
+ 
+ 	/*
+ 	 * Initialize errno, since readdir does not set it to zero on EOF.
+@@ -201,17 +295,52 @@
+ 	}
+ 
+ 	ino = get_inode(dirent, iobuf->name);
++	ftstr = ftype(dirent, iobuf->name);
++	out_buf = the_dir->buf;
+ 
+-#if __MINGW32__
+-	len = sprintf(the_dir->buf, "%I64u/%s", ino, dirent->d_name);
++#ifdef __MINGW32__
++	len = sprintf(out_buf, "%I64u/%s", ino, dirent->d_name);
+ #else
+-	len = sprintf(the_dir->buf, "%llu/%s", ino, dirent->d_name);
++	len = sprintf(out_buf, "%llu/%s", ino, dirent->d_name);
+ #endif
+ 
+-	ftstr = ftype(dirent, iobuf->name);
+-	len += sprintf(the_dir->buf + len, "/%s", ftstr);
++#else /* _MSC_VER */
++
++	if (ffd->dwFileAttributes == ~(DWORD)0) {
++		/* no cached entry */
++		if (!FindNextFile((HANDLE)iobuf->fd, ffd)) {
++			const DWORD err = GetLastError();
++			*errcode = ERROR_NO_MORE_FILES == err ? 0 : err ? (int)err : -1;
++			return EOF;
++		}
++	}
++
++	ftstr = ftype_and_ino(ffd, iobuf->name, &ino);
+ 
+-	*out = the_dir->buf;
++	/* mark that there is no cached entry */
++	ffd->dwFileAttributes = ~(DWORD)0;
++
++	/* dwFileAttributes must be the first member */
++	sizeof(int[1-2*!!((char*)&((WIN32_FIND_DATA*)NULL)->dwFileAttributes - (char*)NULL)]);
++
++	/* there must be at least 21 chars between ffd->dwFileAttributes and ffd->cFileName */
++	sizeof(int[1-2*!(
++		(size_t)((char*)&((WIN32_FIND_DATA*)NULL)->cFileName - (char*)NULL) >=
++			sizeof(((WIN32_FIND_DATA*)NULL)->dwFileAttributes) + 21)]);
++
++	/* print max 21 chars, including terminating '\0' */
++	len = sprintf((char*)(&ffd->dwFileAttributes + 1), "%I64u", ino);
++
++	ffd->cFileName[-1] = '/';
++	out_buf = ffd->cFileName - 1 - len;
++	memmove(out_buf, &ffd->dwFileAttributes + 1, len);
++	len += 1 + (int)strlen(ffd->cFileName);
++
++#endif /* _MSC_VER */
++
++	len += sprintf(out_buf + len, "/%s", ftstr);
++
++	*out = out_buf;
+ 
+ 	*rt_start = NULL;
+ 	*rt_len = 0;	/* set RT to "" */
+@@ -230,7 +359,11 @@
+ 
+ 	the_dir = (open_directory_t *) iobuf->opaque;
+ 
++#ifndef _MSC_VER
+ 	closedir(the_dir->dp);
++#else
++	FindClose((HANDLE)iobuf->fd);
++#endif
+ 	gawk_free(the_dir->buf);
+ 	gawk_free(the_dir);
+ 
+@@ -248,6 +381,46 @@
+ 	return (iobuf->fd != INVALID_HANDLE && S_ISDIR(iobuf->sbuf.st_mode));
+ }
+ 
++#ifdef _MSC_VER
++static int
++report_opendir_error(const char *dirname)
++{
++	DWORD n_chars;
++	char *msg_buf = NULL;
++	DWORD last_err = GetLastError();
++
++	if (!last_err)
++		last_err = ERROR_INVALID_DATA;
++
++	n_chars = FormatMessage(
++		FORMAT_MESSAGE_ALLOCATE_BUFFER |
++		FORMAT_MESSAGE_FROM_SYSTEM |
++		FORMAT_MESSAGE_IGNORE_INSERTS,
++		NULL, last_err, 0, (LPSTR)&msg_buf, 0, NULL);
++
++	/* trim "\r\n" at end of msg */
++	if (n_chars) {
++		if ('\n' == msg_buf[n_chars - 1]) {
++			msg_buf[--n_chars] = '\0';
++			if (n_chars && '\r' == msg_buf[n_chars - 1])
++				msg_buf[--n_chars] = '\0';
++		}
++	}
++
++	if (n_chars)
++		warning(ext_id, _("dir_take_control_of: "
++			"couldn't open directory: %s, system error: 0x%x (%s)"),
++			dirname, last_err, msg_buf);
++	else
++		warning(ext_id, _("dir_take_control_of: "
++			"couldn't open directory: %s, system error: 0x%x"),
++			dirname, last_err);
++
++	LocalFree(msg_buf);
++	return (int)last_err;
++}
++#endif /* _MSC_VER */
++
+ /*
+  * dir_take_control_of --- set up input parser.
+  * We can assume that dir_can_take_file just returned true,
+@@ -257,10 +430,14 @@
+ static awk_bool_t
+ dir_take_control_of(awk_input_buf_t *iobuf)
+ {
+-	DIR *dp;
++	char *buf;
+ 	open_directory_t *the_dir;
+ 	size_t size;
+ 
++#ifndef _MSC_VER
++
++	DIR *dp;
++
+ 	errno = 0;
+ #ifdef HAVE_FDOPENDIR
+ 	dp = fdopendir(iobuf->fd);
+@@ -276,10 +453,54 @@
+ 		return awk_false;
+ 	}
+ 
++	size = sizeof(struct dirent) + 20 /* max digits in inode */ + 2 /* slashes */ + 1 /* ftype */;
++	emalloc(buf, char *, size, "dir_take_control_of");
++
++#else /* _MSC_VER */
++
++	HANDLE h;
++	char path_buf[MAX_PATH];
++	size_t dir_len = strlen(iobuf->name);
++
++	if (dir_len > sizeof(path_buf) - sizeof("\\*")) {
++		warning(ext_id, _("dir_take_control_of: too long directory name: %s"),
++				iobuf->name);
++		update_ERRNO_int(ENAMETOOLONG);
++		return awk_false;
++	}
++
++	memcpy(path_buf, iobuf->name, dir_len);
++	memcpy(path_buf + dir_len, "\\*", sizeof("\\*"));
++
++	size = sizeof(WIN32_FIND_DATA) + 1 /* slash */ + 1 /* ftype */;
++	emalloc(buf, char *, size, "dir_take_control_of");
++
++	/* cache found file in the buf */
++	h = FindFirstFile(path_buf, (WIN32_FIND_DATA*)buf);
++
++	/* must find at least '.', otherwise directory path is wrong */
++	if (h == INVALID_HANDLE_VALUE ||
++		((WIN32_FIND_DATA*)buf)->dwFileAttributes == ~(DWORD)0)
++	{
++		int err = report_opendir_error(iobuf->name);
++		gawk_free(buf);
++		update_ERRNO_int(err);
++		return awk_false;
++	}
++
++	/* ensure that INVALID_HANDLE_VALUE == INVALID_HANDLE */
++	(void)sizeof(int[1-2*!((int)INVALID_HANDLE_VALUE == INVALID_HANDLE)]);
++	(void)sizeof(int[1-2*!(INVALID_HANDLE_VALUE == (HANDLE)INVALID_HANDLE)]);
++
++	iobuf->fd = (int)h; /* only 32 bits of HANDLE are meaningful */
++
++#endif /* _MSC_VER */
++
+ 	emalloc(the_dir, open_directory_t *, sizeof(open_directory_t), "dir_take_control_of");
++#ifndef _MSC_VER
+ 	the_dir->dp = dp;
+-	size = sizeof(struct dirent) + 21 /* max digits in inode */ + 2 /* slashes */;
+-	emalloc(the_dir->buf, char *, size, "dir_take_control_of");
++#endif
++	the_dir->buf = buf;
+ 
+ 	iobuf->opaque = the_dir;
+ 	iobuf->get_record = dir_get_record;
+--- orig/gawk-5.0.1/extension/readdir_test.c	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/extension/readdir_test.c	2019-12-11 13:24:18.335469900 +0300
+@@ -8,6 +8,10 @@
+  * Andrew Schorr and Arnold Robbins: further fixes 8/2012.
+  * Simplified 11/2012.
+  * Improved 3/2019.
++ *
++ * Michael M. Builov: ported to _MSC_VER.
++ * mbuilov@gmail.com
++ * Ported 12/2019
+  */
+ 
+ /*
+@@ -40,7 +44,10 @@
+ #include <errno.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifndef _MSC_VER
+ #include <unistd.h>
++#endif
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -51,11 +58,11 @@
+ 
+ #ifdef HAVE_DIRENT_H
+ #include <dirent.h>
+-#else
++#elif ! defined _MSC_VER
+ #error Cannot compile the readdir extension on this system!
+ #endif
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+ #endif
+@@ -84,7 +91,9 @@
+ /* data type for the opaque pointer: */
+ 
+ typedef struct open_directory {
++#ifndef _MSC_VER
+ 	DIR *dp;
++#endif
+ 	char *buf;
+ 	union {
+ 		awk_fieldwidth_info_t fw;
+@@ -93,6 +102,8 @@
+ } open_directory_t;
+ #define fw u.fw
+ 
++#ifndef _MSC_VER
++
+ /* ftype --- return type of file as a single character string */
+ 
+ static const char *
+@@ -150,13 +161,16 @@
+ 	char fname[PATH_MAX];
+ 	HANDLE fh;
+ 	BY_HANDLE_FILE_INFORMATION info;
++	BOOL ok;
+ 
+ 	sprintf(fname, "%s\\%s", dirname, entry->d_name);
+ 	fh = CreateFile(fname, 0, 0, NULL, OPEN_EXISTING,
+ 			FILE_FLAG_BACKUP_SEMANTICS, NULL);
+ 	if (fh == INVALID_HANDLE_VALUE)
+ 		return 0;
+-	if (GetFileInformationByHandle(fh, &info)) {
++	ok = GetFileInformationByHandle(fh, &info);
++	CloseHandle(fh);
++	if (ok) {
+ 		long long inode = info.nFileIndexHigh;
+ 
+ 		inode <<= 32;
+@@ -170,6 +184,75 @@
+ #endif
+ }
+ 
++#else /* _MSC_VER */
++
++/* ftype_and_ino:
++  --- return type of file as a single character string,
++  --- get the inode of a file */
++static const char *
++ftype_and_ino(
++	const WIN32_FIND_DATA *ffd,
++	const char *dirname,
++	unsigned long long *inode/*out*/)
++{
++	HANDLE fh;
++	char fname[2*MAX_PATH];
++
++	unsigned long long ino = 0; /* zero - in case of error */
++	const char *ftstr = "u"; /* unknown - in case of error */
++
++	if (ffd->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
++		ftstr = "l";
++	else if (ffd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
++		ftstr = "d";
++
++	sprintf(fname, "%s\\%s", dirname, ffd->cFileName);
++
++	fh = CreateFile(fname, 0, 0, NULL, OPEN_EXISTING,
++			((ffd->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
++				? FILE_FLAG_OPEN_REPARSE_POINT : 0) |
++			FILE_FLAG_BACKUP_SEMANTICS, NULL);
++
++	if (fh != INVALID_HANDLE_VALUE) {
++
++		BY_HANDLE_FILE_INFORMATION info;
++
++		if (GetFileInformationByHandle(fh, &info)) {
++			ino = info.nFileIndexHigh;
++			ino <<= 32;
++			ino += info.nFileIndexLow;
++		}
++
++		if ('u' == *ftstr) {
++			const DWORD ft = GetFileType(fh);
++
++			switch (ft) {
++				case FILE_TYPE_DISK:
++					ftstr = "f";
++					break;
++				case FILE_TYPE_CHAR:
++					ftstr = "c";
++					break;
++				case FILE_TYPE_PIPE:
++					if (GetNamedPipeInfo(fh, NULL, NULL, NULL, NULL))
++						ftstr = "p";
++					else
++						ftstr = "s";
++					break;
++				default:
++					break;
++			}
++		}
++
++		CloseHandle(fh);
++	}
++
++	*inode = ino;
++	return ftstr;
++}
++
++#endif /* _MSC_VER */
++
+ /* dir_get_record --- get one record at a time out of a directory */
+ 
+ static int
+@@ -177,8 +260,13 @@
+ 		char **rt_start, size_t *rt_len,
+ 		const awk_fieldwidth_info_t **field_width)
+ {
++#ifndef _MSC_VER
+ 	DIR *dp;
+ 	struct dirent *dirent;
++#else
++	WIN32_FIND_DATA *ffd;
++#endif
++	char *out_buf;
+ 	int len, flen;
+ 	open_directory_t *the_dir;
+ 	const char *ftstr;
+@@ -193,7 +281,13 @@
+ 		return EOF;
+ 
+ 	the_dir = (open_directory_t *) iobuf->opaque;
++#ifndef _MSC_VER
+ 	dp = the_dir->dp;
++#else
++	ffd = (WIN32_FIND_DATA*)the_dir->buf;
++#endif
++
++#ifndef _MSC_VER
+ 
+ 	/*
+ 	 * Initialize errno, since readdir does not set it to zero on EOF.
+@@ -206,21 +300,59 @@
+ 	}
+ 
+ 	ino = get_inode(dirent, iobuf->name);
++	ftstr = ftype(dirent, iobuf->name);
++	out_buf = the_dir->buf;
+ 
+-#if __MINGW32__
+-	len = sprintf(the_dir->buf, "%I64u", ino);
++#ifdef __MINGW32__
++	len = sprintf(out_buf, "%I64u", ino);
+ #else
+-	len = sprintf(the_dir->buf, "%llu", ino);
++	len = sprintf(out_buf, "%llu", ino);
+ #endif
+ 	the_dir->fw.fields[0].len = len;
+-	len += (flen = sprintf(the_dir->buf + len, "/%s", dirent->d_name));
++	len += (flen = sprintf(out_buf + len, "/%s", dirent->d_name));
+ 	the_dir->fw.fields[1].len = flen-1;
+ 
+-	ftstr = ftype(dirent, iobuf->name);
+-	len += (flen = sprintf(the_dir->buf + len, "/%s", ftstr));
++#else /* _MSC_VER */
++
++	if (ffd->dwFileAttributes == ~(DWORD)0) {
++		/* no cached entry */
++		if (!FindNextFile((HANDLE)iobuf->fd, ffd)) {
++			const DWORD err = GetLastError();
++			*errcode = ERROR_NO_MORE_FILES == err ? 0 : err ? (int)err : -1;
++			return EOF;
++		}
++	}
++
++	ftstr = ftype_and_ino(ffd, iobuf->name, &ino);
++
++	/* mark that there is no cached entry */
++	ffd->dwFileAttributes = ~(DWORD)0;
++
++	/* dwFileAttributes must be the first member */
++	sizeof(int[1-2*!!((char*)&((WIN32_FIND_DATA*)NULL)->dwFileAttributes - (char*)NULL)]);
++
++	/* there must be at least 21 chars between ffd->dwFileAttributes and ffd->cFileName */
++	sizeof(int[1-2*!(
++		(size_t)((char*)&((WIN32_FIND_DATA*)NULL)->cFileName - (char*)NULL) >=
++			sizeof(((WIN32_FIND_DATA*)NULL)->dwFileAttributes) + 21)]);
++
++	/* print max 21 chars, including terminating '\0' */
++	len = sprintf((char*)(&ffd->dwFileAttributes + 1), "%I64u", ino);
++
++	ffd->cFileName[-1] = '/';
++	out_buf = ffd->cFileName - 1 - len;
++	memmove(out_buf, &ffd->dwFileAttributes + 1, len);
++
++	the_dir->fw.fields[0].len = len;
++	len += 1 + (flen = (int)strlen(ffd->cFileName));
++	the_dir->fw.fields[1].len = flen;
++
++#endif /* _MSC_VER */
++
++	len += (flen = sprintf(out_buf + len, "/%s", ftstr));
+ 	the_dir->fw.fields[2].len = flen-1;
+ 
+-	*out = the_dir->buf;
++	*out = out_buf;
+ 
+ 	*rt_start = NULL;
+ 	*rt_len = 0;	/* set RT to "" */
+@@ -241,7 +373,11 @@
+ 
+ 	the_dir = (open_directory_t *) iobuf->opaque;
+ 
++#ifndef _MSC_VER
+ 	closedir(the_dir->dp);
++#else
++	FindClose((HANDLE)iobuf->fd);
++#endif
+ 	gawk_free(the_dir->buf);
+ 	gawk_free(the_dir);
+ 
+@@ -259,6 +395,46 @@
+ 	return (iobuf->fd != INVALID_HANDLE && S_ISDIR(iobuf->sbuf.st_mode));
+ }
+ 
++#ifdef _MSC_VER
++static int
++report_opendir_error(const char *dirname)
++{
++	DWORD n_chars;
++	char *msg_buf = NULL;
++	DWORD last_err = GetLastError();
++
++	if (!last_err)
++		last_err = ERROR_INVALID_DATA;
++
++	n_chars = FormatMessage(
++		FORMAT_MESSAGE_ALLOCATE_BUFFER |
++		FORMAT_MESSAGE_FROM_SYSTEM |
++		FORMAT_MESSAGE_IGNORE_INSERTS,
++		NULL, last_err, 0, (LPSTR)&msg_buf, 0, NULL);
++
++	/* trim "\r\n" at end of msg */
++	if (n_chars) {
++		if ('\n' == msg_buf[n_chars - 1]) {
++			msg_buf[--n_chars] = '\0';
++			if (n_chars && '\r' == msg_buf[n_chars - 1])
++				msg_buf[--n_chars] = '\0';
++		}
++	}
++
++	if (n_chars)
++		warning(ext_id, _("dir_take_control_of: "
++			"couldn't open directory: %s, system error: 0x%x (%s)"),
++			dirname, last_err, msg_buf);
++	else
++		warning(ext_id, _("dir_take_control_of: "
++			"couldn't open directory: %s, system error: 0x%x"),
++			dirname, last_err);
++
++	LocalFree(msg_buf);
++	return (int)last_err;
++}
++#endif /* _MSC_VER */
++
+ /*
+  * dir_take_control_of --- set up input parser.
+  * We can assume that dir_can_take_file just returned true,
+@@ -268,10 +444,14 @@
+ static awk_bool_t
+ dir_take_control_of(awk_input_buf_t *iobuf)
+ {
+-	DIR *dp;
++	char *buf;
+ 	open_directory_t *the_dir;
+ 	size_t size;
+ 
++#ifndef _MSC_VER
++
++	DIR *dp;
++
+ 	errno = 0;
+ #ifdef HAVE_FDOPENDIR
+ 	dp = fdopendir(iobuf->fd);
+@@ -287,16 +467,60 @@
+ 		return awk_false;
+ 	}
+ 
++	size = sizeof(struct dirent) + 20 /* max digits in inode */ + 2 /* slashes */ + 1 /* ftype */;
++	emalloc(buf, char *, size, "dir_take_control_of");
++
++#else /* _MSC_VER */
++
++	HANDLE h;
++	char path_buf[MAX_PATH];
++	size_t dir_len = strlen(iobuf->name);
++
++	if (dir_len > sizeof(path_buf) - sizeof("\\*")) {
++		warning(ext_id, _("dir_take_control_of: too long directory name: %s"),
++				iobuf->name);
++		update_ERRNO_int(ENAMETOOLONG);
++		return awk_false;
++	}
++
++	memcpy(path_buf, iobuf->name, dir_len);
++	memcpy(path_buf + dir_len, "\\*", sizeof("\\*"));
++
++	size = sizeof(WIN32_FIND_DATA) + 1 /* slash */ + 1 /* ftype */;
++	emalloc(buf, char *, size, "dir_take_control_of");
++
++	/* cache found file in the buf */
++	h = FindFirstFile(path_buf, (WIN32_FIND_DATA*)buf);
++
++	/* must find at least '.', otherwise directory path is wrong */
++	if (h == INVALID_HANDLE_VALUE ||
++		((WIN32_FIND_DATA*)buf)->dwFileAttributes == ~(DWORD)0)
++	{
++		int err = report_opendir_error(iobuf->name);
++		gawk_free(buf);
++		update_ERRNO_int(err);
++		return awk_false;
++	}
++
++	/* ensure that INVALID_HANDLE_VALUE == INVALID_HANDLE */
++	(void)sizeof(int[1-2*!((int)INVALID_HANDLE_VALUE == INVALID_HANDLE)]);
++	(void)sizeof(int[1-2*!(INVALID_HANDLE_VALUE == (HANDLE)INVALID_HANDLE)]);
++
++	iobuf->fd = (int)h; /* only 32 bits of HANDLE are meaningful */
++
++#endif /* _MSC_VER */
++
+ 	emalloc(the_dir, open_directory_t *, sizeof(open_directory_t), "dir_take_control_of");
++#ifndef _MSC_VER
+ 	the_dir->dp = dp;
++#endif
++	the_dir->buf = buf;
+ 	/* pre-populate the field_width struct with constant values: */
+ 	the_dir->fw.use_chars = awk_false;
+ 	the_dir->fw.nf = 3;
+ 	the_dir->fw.fields[0].skip = 0;	/* no leading space */
+ 	the_dir->fw.fields[1].skip = 1;	/* single '/' separator */
+ 	the_dir->fw.fields[2].skip = 1;	/* single '/' separator */
+-	size = sizeof(struct dirent) + 21 /* max digits in inode */ + 2 /* slashes */;
+-	emalloc(the_dir->buf, char *, size, "dir_take_control_of");
+ 
+ 	iobuf->opaque = the_dir;
+ 	iobuf->get_record = dir_get_record;
+--- orig/gawk-5.0.1/extension/readfile.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/extension/readfile.c	2019-12-11 12:34:52.598445700 +0300
+@@ -45,7 +45,12 @@
+ #include <fcntl.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifdef _MSC_VER
++#include <io.h>
++#else
+ #include <unistd.h>
++#endif
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -63,7 +68,7 @@
+ static const gawk_api_t *api;	/* for convenience macros to work */
+ static awk_ext_id_t ext_id;
+ static const char *ext_version = "readfile extension: version 2.0";
+-static awk_bool_t init_readfile();
++static awk_bool_t init_readfile(void);
+ static awk_bool_t (*init_func)(void) = init_readfile;
+ 
+ int plugin_is_GPL_compatible;
+@@ -228,7 +233,7 @@
+ /* init_readfile --- set things up */
+ 
+ static awk_bool_t
+-init_readfile()
++init_readfile(void)
+ {
+ 	register_input_parser(& readfile_parser);
+ 
+--- orig/gawk-5.0.1/extension/revoutput.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/extension/revoutput.c	2019-12-11 12:34:52.599445700 +0300
+@@ -34,7 +34,6 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+-#include <unistd.h>
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+--- orig/gawk-5.0.1/extension/revtwoway.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/extension/revtwoway.c	2019-12-11 12:34:52.600445800 +0300
+@@ -36,7 +36,10 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifndef _MSC_VER
+ #include <unistd.h>
++#endif
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+--- orig/gawk-5.0.1/extension/rwarray.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/extension/rwarray.c	2019-12-11 12:34:52.602445900 +0300
+@@ -38,9 +38,12 @@
+ #include <fcntl.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifndef _MSC_VER
+ #include <unistd.h>
++#endif
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #include <winsock2.h>
+ #include <stdint.h>
+ #else
+--- orig/gawk-5.0.1/extension/testext.c	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/extension/testext.c	2019-12-11 12:34:52.603446000 +0300
+@@ -33,7 +33,12 @@
+ #include <errno.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifdef _MSC_VER
++#include <io.h>
++#else
+ #include <unistd.h>
++#endif
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -49,7 +54,7 @@
+ 
+ static void fill_in_array(awk_value_t *value);
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ unsigned int
+ getuid (void)
+ {
+--- orig/gawk-5.0.1/extension/time.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/extension/time.c	2019-12-11 12:34:52.604446000 +0300
+@@ -33,7 +33,10 @@
+ #include <errno.h>
+ #include <stdlib.h>
+ #include <string.h>
++
++#ifndef _MSC_VER
+ #include <unistd.h>
++#endif
+ 
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -72,6 +75,18 @@
+ #endif
+ #endif
+ 
++#include <time.h>
++#if defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)
++#include <sys/time.h>
++#endif
++#if defined(HAVE_SELECT) && defined(HAVE_SYS_SELECT_H)
++#include <sys/select.h>
++#endif
++#if defined(HAVE_GETSYSTEMTIMEASFILETIME)
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#endif
++
+ #include "gawkapi.h"
+ 
+ #include "gettext.h"
+@@ -85,18 +100,6 @@
+ 
+ int plugin_is_GPL_compatible;
+ 
+-#include <time.h>
+-#if defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)
+-#include <sys/time.h>
+-#endif
+-#if defined(HAVE_SELECT) && defined(HAVE_SYS_SELECT_H)
+-#include <sys/select.h>
+-#endif
+-#if defined(HAVE_GETSYSTEMTIMEASFILETIME)
+-#define WIN32_LEAN_AND_MEAN
+-#include <windows.h>
+-#endif
+-
+ /*
+  * Returns time since 1/1/1970 UTC as a floating point value; should
+  * have sub-second precision, but the actual precision will vary based
+--- orig/gawk-5.0.1/field.c	2019-05-22 21:00:52.000000000 +0300
++++ gawk-5.0.1/field.c	2019-12-11 12:34:52.606446100 +0300
+@@ -1313,7 +1313,7 @@
+ 		}
+ 	} else if (fs->stlen > 1) {
+ 		if (do_lint_old)
+-			warning(_("old awk does not support regexps as value of `FS'"));
++			awk_warning(_("old awk does not support regexps as value of `FS'"));
+ 		set_parser(re_parse_field);
+ 	} else if (RS_is_null) {
+ 		/* we know that fs->stlen <= 1 */
+--- orig/gawk-5.0.1/gawkapi.c	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/gawkapi.c	2019-12-11 12:34:52.608446300 +0300
+@@ -607,7 +607,7 @@
+ 				}
+ 				/* fall through */
+ 			default:
+-				warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
++				awk_warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
+ 				val->val_type = AWK_UNDEFINED;
+ 				break;
+ 			}
+@@ -641,7 +641,7 @@
+ 				}
+ 				/* fall through */
+ 			default:
+-				warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
++				awk_warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
+ 				val->val_type = AWK_UNDEFINED;
+ 				break;
+ 			}
+@@ -668,7 +668,7 @@
+ 				}
+ 				/* fall through */
+ 			default:
+-				warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
++				awk_warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
+ 				val->val_type = AWK_UNDEFINED;
+ 				break;
+ 			}
+@@ -701,7 +701,7 @@
+ 				}
+ 				/* fall through */
+ 			default:
+-				warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
++				awk_warning(_("node_to_awk_value detected invalid flags combination `%s'; please file a bug report."), flags2str(node->flags));
+ 				val->val_type = AWK_UNDEFINED;
+ 				break;
+ 			}
+@@ -1416,7 +1416,7 @@
+ 	}
+ 
+ 	if (redirtype == redirect_none) {
+-		warning(_("cannot open unrecognized file type `%s' for `%s'"),
++		awk_warning(_("cannot open unrecognized file type `%s' for `%s'"),
+ 			filetype, name);
+ 		return awk_false;
+ 	}
+--- orig/gawk-5.0.1/gawkmisc.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/gawkmisc.c	2019-12-11 12:34:52.609446300 +0300
+@@ -32,12 +32,12 @@
+ 
+ /* some old compilers don't grok #elif. sigh */
+ 
+-#if defined(__EMX__) || defined(__DJGPP__) || defined(__MINGW32__)
++#if defined(__EMX__) || defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ #include "pc/gawkmisc.pc"
+-#else /* not __DJGPP__, not __MINGW32__ */
++#else /* not __EMX__, not __DJGPP__, not __MINGW32__, not _MSC_VER */
+ #if defined(VMS)
+ #include "vms/gawkmisc.vms"
+ #else /* not VMS */
+ #include "posix/gawkmisc.c"
+ #endif /* not VMS */
+-#endif /* not __DJGPP__, not __MINGW32__ */
++#endif /* not __EMX__, not __DJGPP__, not __MINGW32__, not _MSC_VER */
+--- orig/gawk-5.0.1/io.c	2019-05-22 21:00:52.000000000 +0300
++++ gawk-5.0.1/io.c	2019-12-11 12:34:52.613446500 +0300
+@@ -113,7 +113,7 @@
+ #include "popen.h"
+ #endif
+ 
+-#ifdef __EMX__
++#if defined(__EMX__) || defined(_MSC_VER)
+ #include <process.h>
+ 
+ #if !defined(_S_IFDIR) && defined(S_IFDIR)
+@@ -123,8 +123,13 @@
+ #if !defined(_S_IRWXU) && defined(S_IRWXU)
+ #define _S_IRWXU	S_IRWXU
+ #endif
++
++#if !defined(_S_IRWXU) && defined(_S_IREAD) && defined(_S_IWRITE) && defined(_S_IEXEC)
++#define _S_IRWXU	(_S_IREAD | _S_IWRITE | _S_IEXEC)
+ #endif
+ 
++#endif /* __EMX__ || _MSC_VER */
++
+ #ifndef ENFILE
+ #define ENFILE EMFILE
+ #endif
+@@ -199,7 +204,7 @@
+ #define PIPES_SIMULATED
+ #endif
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ # ifndef PIPES_SIMULATED
+ #  define pipe(fds)	_pipe(fds, 0, O_NOINHERIT)
+ # endif
+@@ -213,6 +218,11 @@
+ #define INCREMENT_REC(X)	X++
+ #endif
+ 
++#ifdef _MSC_VER
++/* defined in pc/gawkmisc.pc */
++int usleep(unsigned int usec);
++#endif
++
+ /* Several macros to make the code a bit clearer. */
+ #define at_eof(iop)     (((iop)->flag & IOP_AT_EOF) != 0)
+ #define has_no_data(iop)        ((iop)->dataend == NULL)
+@@ -361,7 +371,7 @@
+ }
+ 
+ 
+-#if defined(__DJGPP__) || defined(__MINGW32__) || defined(__EMX__) || defined(__CYGWIN__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(__EMX__) || defined(__CYGWIN__) || defined(_MSC_VER)
+ /* binmode --- convert BINMODE to string for fopen */
+ 
+ static const char *
+@@ -423,7 +433,7 @@
+ 		iop_close(iop);
+ 		*curfile = NULL;
+ 		if (! valid && errcode == EISDIR && ! do_traditional) {
+-			warning(_("command line argument `%s' is a directory: skipped"), fname);
++			awk_warning(_("command line argument `%s' is a directory: skipped"), fname);
+ 			return;		/* read next file */
+ 		}
+ 		fatal(_("cannot open file `%s' for reading (%s)"),
+@@ -672,7 +682,7 @@
+ 	}
+ 
+ 	if (ret == -1)
+-		warning(_("close of fd %d (`%s') failed (%s)"), iop->public.fd,
++		awk_warning(_("close of fd %d (`%s') failed (%s)"), iop->public.fd,
+ 				iop->public.name, strerror(errno));
+ 	/*
+ 	 * Be careful -- $0 may still reference the buffer even though
+@@ -820,7 +830,7 @@
+ 		 */
+ 		if ((rp->flag & RED_EOF) != 0 && redirtype == redirect_pipein) {
+ 			if (rp->pid != -1)
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 				/* MinGW cannot wait for any process.  */
+ 				wait_any(rp->pid);
+ #else
+@@ -832,9 +842,9 @@
+ 		/* now check for a match */
+ 		if (strlen(rp->value) == explen
+ 		    && memcmp(rp->value, str, explen) == 0
+-		    && ((rp->flag & ~(RED_NOBUF|RED_EOF|RED_PTY)) == tflag
++		    && ((rp->flag & ~(RED_NOBUF|RED_EOF|RED_PTY)) == (unsigned)tflag
+ 			|| (outflag != 0
+-			    && (rp->flag & (RED_FILE|RED_WRITE)) == outflag))) {
++			    && (rp->flag & (RED_FILE|RED_WRITE)) == (unsigned)outflag))) {
+ 
+ 			int rpflag = (rp->flag & ~(RED_NOBUF|RED_EOF|RED_PTY));
+ 			int newflag = (tflag & ~(RED_NOBUF|RED_EOF|RED_PTY));
+@@ -893,7 +903,7 @@
+ 			break;
+ 		case redirect_pipe:
+ 			if (extfd >= 0) {
+-				warning(_("get_file cannot create pipe `%s' with fd %d"), str, extfd);
++				awk_warning(_("get_file cannot create pipe `%s' with fd %d"), str, extfd);
+ 				return NULL;
+ 			}
+ 			/* synchronize output before new pipe */
+@@ -918,7 +928,7 @@
+ 			break;
+ 		case redirect_pipein:
+ 			if (extfd >= 0) {
+-				warning(_("get_file cannot create pipe `%s' with fd %d"), str, extfd);
++				awk_warning(_("get_file cannot create pipe `%s' with fd %d"), str, extfd);
+ 				return NULL;
+ 			}
+ 			direction = "from";
+@@ -947,7 +957,7 @@
+ 		case redirect_twoway:
+ #ifndef HAVE_SOCKETS
+ 			if (extfd >= 0) {
+-				warning(_("get_file socket creation not supported on this platform for `%s' with fd %d"), str, extfd);
++				awk_warning(_("get_file socket creation not supported on this platform for `%s' with fd %d"), str, extfd);
+ 				return NULL;
+ 			}
+ #endif
+@@ -1166,7 +1176,7 @@
+ 			rp->flag |= RED_USED;
+ 			errno = 0;
+ 			if (rp->output.gawk_fclose(rp->output.fp, rp->output.opaque) != 0)
+-				warning(_("close of `%s' failed (%s)."),
++				awk_warning(_("close of `%s' failed (%s)."),
+ 					rp->value, strerror(errno));
+ 			rp->output.fp = NULL;
+ 			break;
+@@ -1362,16 +1372,16 @@
+ 		 * for the types makes message translation easier.
+ 		 */
+ 		if ((rp->flag & RED_SOCKET) != 0)
+-			warning(_("no explicit close of socket `%s' provided"),
++			awk_warning(_("no explicit close of socket `%s' provided"),
+ 				rp->value);
+ 		else if ((rp->flag & RED_TWOWAY) != 0)
+-			warning(_("no explicit close of co-process `%s' provided"),
++			awk_warning(_("no explicit close of co-process `%s' provided"),
+ 				rp->value);
+ 		else if ((rp->flag & RED_PIPE) != 0)
+-			warning(_("no explicit close of pipe `%s' provided"),
++			awk_warning(_("no explicit close of pipe `%s' provided"),
+ 				rp->value);
+ 		else
+-			warning(_("no explicit close of file `%s' provided"),
++			awk_warning(_("no explicit close of file `%s' provided"),
+ 				rp->value);
+ 	}
+ 
+@@ -1400,7 +1410,7 @@
+ 		bool is_fatal = ! is_non_fatal_std(fp);
+ 
+ 		if (is_fatal) {
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 			if (errno == 0 || errno == EINVAL)
+ 				w32_maybe_set_errno();
+ #endif
+@@ -1413,7 +1423,7 @@
+ 						strerror(errno));
+ 		} else {
+ 			update_ERRNO_int(errno);
+-			warning(fp == stdout
++			awk_warning(fp == stdout
+ 				? _("error writing standard output (%s)")
+ 				: _("error writing standard error (%s)"),
+ 					strerror(errno));
+@@ -1500,12 +1510,12 @@
+ 	*stdio_problem = false;
+ 	/* we don't warn about stdout/stderr if EPIPE, but we do error exit */
+ 	if (fflush(stdout) != 0) {
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 		if (errno == 0 || errno == EINVAL)
+ 			w32_maybe_set_errno();
+ #endif
+ 		if (errno != EPIPE)
+-			warning(_("error writing standard output (%s)"), strerror(errno));
++			awk_warning(_("error writing standard output (%s)"), strerror(errno));
+ 		else
+ 			*got_EPIPE = true;
+ 
+@@ -1513,12 +1523,12 @@
+ 		*stdio_problem = true;
+ 	}
+ 	if (fflush(stderr) != 0) {
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 		if (errno == 0 || errno == EINVAL)
+ 			w32_maybe_set_errno();
+ #endif
+ 		if (errno != EPIPE)
+-			warning(_("error writing standard error (%s)"), strerror(errno));
++			awk_warning(_("error writing standard error (%s)"), strerror(errno));
+ 		else
+ 			*got_EPIPE = true;
+ 
+@@ -1607,10 +1617,10 @@
+ 	if (lerror) {
+ 		if (strcmp(localpname, "0") != 0) {
+ #ifdef HAVE_GAI_STRERROR
+-			warning(_("local port %s invalid in `/inet': %s"), localpname,
++			awk_warning(_("local port %s invalid in `/inet': %s"), localpname,
+ 					gai_strerror(lerror));
+ #else
+-			warning(_("local port %s invalid in `/inet'"), localpname);
++			awk_warning(_("local port %s invalid in `/inet'"), localpname);
+ #endif
+ 			*hard_error = true;
+ 			return INVALID_HANDLE;
+@@ -1633,10 +1643,10 @@
+ 			if (lres0 != NULL)
+ 				freeaddrinfo(lres0);
+ #ifdef HAVE_GAI_STRERROR
+-			warning(_("remote host and port information (%s, %s) invalid: %s"), remotehostname, remotepname,
++			awk_warning(_("remote host and port information (%s, %s) invalid: %s"), remotehostname, remotepname,
+ 					gai_strerror(rerror));
+ #else
+-			warning(_("remote host and port information (%s, %s) invalid"), remotehostname, remotepname);
++			awk_warning(_("remote host and port information (%s, %s) invalid"), remotehostname, remotepname);
+ #endif
+ 			*hard_error = true;
+ 			return INVALID_HANDLE;
+@@ -1665,11 +1675,11 @@
+ 					(char *) & linger, sizeof(linger));
+ #endif
+ 			}
+-			if (bind(socket_fd, lres->ai_addr, lres->ai_addrlen) != 0)
++			if (bind(socket_fd, lres->ai_addr, (int)lres->ai_addrlen) != 0)
+ 				goto nextrres;
+ 
+ 			if (! any_remote_host) { /* not ANY => create a client */
+-				if (connect(socket_fd, rres->ai_addr, rres->ai_addrlen) == 0)
++				if (connect(socket_fd, rres->ai_addr, (int)rres->ai_addrlen) == 0)
+ 					break;
+ 			} else { /* remote host is ANY => create a server */
+ 				if (type == SOCK_STREAM) {
+@@ -1833,14 +1843,14 @@
+ 		cp[isi.remoteport.offset+isi.remoteport.len] = '\0';
+ 
+ 		if (first_time) {
+-			char *cp, *end;
++			char *cp1, *end;
+ 			unsigned long count = 0;
+ 			char *ms2;
+ 
+ 			first_time = false;
+-			if ((cp = getenv("GAWK_SOCK_RETRIES")) != NULL) {
+-				count = strtoul(cp, & end, 10);
+-				if (end != cp && count > 0)
++			if ((cp1 = getenv("GAWK_SOCK_RETRIES")) != NULL) {
++				count = strtoul(cp1, & end, 10);
++				if (end != cp1 && count > 0)
+ 					def_retries = count;
+ 			}
+ 
+@@ -1893,7 +1903,7 @@
+ 		if (openfd == INVALID_HANDLE && errno == ENOENT && save_errno)
+ 			errno = save_errno;
+ 	}
+-#if defined(__EMX__) || defined(__MINGW32__)
++#if defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
+ 	if (openfd == INVALID_HANDLE && errno == EACCES) {
+ 		/* On OS/2 and Windows directory access via open() is
+ 		   not permitted.  */
+@@ -2300,18 +2310,18 @@
+ 		first_pty_letter = '\0';	/* reset for next command */
+ 		return true;
+ 	}
++use_pipes:
+ #endif /* defined(HAVE_TERMIOS_H) */
+ 
+-use_pipes:
+ #ifndef PIPES_SIMULATED		/* real pipes */
+ 	/* case 4: two way pipe to a child process */
+     {
+ 	int ptoc[2], ctop[2];
+ 	int pid;
+ 	int save_errno;
+-#if defined(__EMX__) || defined(__MINGW32__)
++#if defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
+ 	int save_stdout, save_stdin;
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	char *qcmd = NULL;
+ #endif
+ #endif
+@@ -2327,7 +2337,7 @@
+ 		return false;
+ 	}
+ 
+-#if defined(__EMX__) || defined(__MINGW32__)
++#if defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
+ 	save_stdin = dup(0);	/* duplicate stdin */
+ 	save_stdout = dup(1);	/* duplicate stdout */
+ 
+@@ -2372,7 +2382,7 @@
+ 	/* stderr does NOT get dup'ed onto child's stdout */
+ #ifdef __EMX__
+ 	pid = spawnl(P_NOWAIT, "/bin/sh", "sh", "-c", str, NULL);
+-#else  /* __MINGW32__ */
++#else  /* __MINGW32__ || _MSC_VER */
+ 	pid = spawnl(P_NOWAIT, getenv("ComSpec"), "cmd.exe", "/c",
+ 		     qcmd = quote_cmd(str), NULL);
+ 	efree(qcmd);
+@@ -2404,7 +2414,7 @@
+ 		return false;
+ 	}
+ 
+-#else /* NOT __EMX__, NOT __MINGW32__ */
++#else /* NOT __EMX__, NOT __MINGW32__, NOT _MSC_VER */
+ 	if ((pid = fork()) < 0) {
+ 		save_errno = errno;
+ 		close(ptoc[0]); close(ptoc[1]);
+@@ -2432,7 +2442,7 @@
+ 		execl("/bin/sh", "sh", "-c", str, NULL);
+ 		_exit(errno == ENOENT ? 127 : 126);
+ 	}
+-#endif /* NOT __EMX__, NOT __MINGW32__ */
++#endif /* NOT __EMX__, NOT __MINGW32__, NOT _MSC_VER */
+ 
+ 	/* parent */
+ 	if ((BINMODE & BINMODE_INPUT) != 0)
+@@ -2472,7 +2482,7 @@
+ 	else
+ 		find_output_wrapper(& rp->output);
+ 
+-#if !defined(__EMX__) && !defined(__MINGW32__)
++#if !defined(__EMX__) && !defined(__MINGW32__) && !defined(_MSC_VER)
+ 	os_close_on_exec(ctop[0], str, "pipe", "from");
+ 	os_close_on_exec(ptoc[1], str, "pipe", "from");
+ 
+@@ -2531,7 +2541,7 @@
+ 
+ 	istat = signal(SIGINT, SIG_IGN);
+ #endif
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	if (interesting < 0) {
+ 		status = -1;
+ 		pid = -1;
+@@ -2546,7 +2556,8 @@
+ 				break;
+ 			}
+ 	}
+-#else /* ! __MINGW32__ */
++	(void)hstat, (void)qstat;
++#else /* ! __MINGW32__ && ! _MSC_VER */
+ #ifndef HAVE_SIGPROCMASK
+ 	hstat = signal(SIGHUP, SIG_IGN);
+ 	qstat = signal(SIGQUIT, SIG_IGN);
+@@ -2583,7 +2594,7 @@
+ 	signal(SIGHUP, hstat);
+ 	signal(SIGQUIT, qstat);
+ #endif
+-#endif /* ! __MINGW32__ */
++#endif /* ! __MINGW32__ && ! _MSC_VER */
+ #ifndef HAVE_SIGPROCMASK
+ 	signal(SIGINT, istat);
+ #else
+@@ -2599,9 +2610,9 @@
+ {
+ 	int p[2];
+ 	int pid;
+-#if defined(__EMX__) || defined(__MINGW32__)
++#if defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
+ 	int save_stdout;
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	char *qcmd = NULL;
+ #endif
+ #endif
+@@ -2617,7 +2628,7 @@
+ 	if (pipe(p) < 0)
+ 		fatal(_("cannot open pipe `%s' (%s)"), cmd, strerror(errno));
+ 
+-#if defined(__EMX__) || defined(__MINGW32__)
++#if defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
+ 	rp->iop = NULL;
+ 	save_stdout = dup(1); /* save stdout */
+ 	if (save_stdout == -1) {
+@@ -2642,7 +2653,7 @@
+ 
+ #ifdef __EMX__
+ 	pid = spawnl(P_NOWAIT, "/bin/sh", "sh", "-c", cmd, NULL);
+-#else  /* __MINGW32__ */
++#else  /* __MINGW32__ || _MSC_VER */
+ 	pid = spawnl(P_NOWAIT, getenv("ComSpec"), "cmd.exe", "/c",
+ 		     qcmd = quote_cmd(cmd), NULL);
+ 	efree(qcmd);
+@@ -2656,7 +2667,7 @@
+ 	}
+ 	close(save_stdout);
+ 
+-#else /* NOT __EMX__, NOT __MINGW32__ */
++#else /* NOT __EMX__, NOT __MINGW32__, NOT _MSC_VER */
+ 	if ((pid = fork()) == 0) {
+ 		if (close(1) == -1)
+ 			fatal(_("close of stdout in child failed (%s)"),
+@@ -2669,14 +2680,14 @@
+ 		execl("/bin/sh", "sh", "-c", cmd, NULL);
+ 		_exit(errno == ENOENT ? 127 : 126);
+ 	}
+-#endif /* NOT __EMX__, NOT __MINGW32__ */
++#endif /* NOT __EMX__, NOT __MINGW32__, NOT _MSC_VER */
+ 
+ 	if (pid == -1) {
+ 		close(p[0]); close(p[1]);
+ 		fatal(_("cannot create child process for `%s' (fork: %s)"), cmd, strerror(errno));
+ 	}
+ 	rp->pid = pid;
+-#if !defined(__EMX__) && !defined(__MINGW32__)
++#if !defined(__EMX__) && !defined(__MINGW32__) && !defined(_MSC_VER)
+ 	if (close(p[1]) == -1) {
+ 		close(p[0]);
+ 		fatal(_("close of pipe failed (%s)"), strerror(errno));
+@@ -2958,7 +2969,7 @@
+ 			for (end = start; *end && *end != envsep; end++)
+ 				continue;
+ 
+-			len = end - start;
++			len = (int)(end - start);
+ 			if (len > 0) {
+ 				emalloc(p, char *, len + 2, "init_awkpath");
+ 				memcpy(p, start, len);
+@@ -3170,7 +3181,7 @@
+ 
+ 	if (ip != NULL) {
+ 		if (! ip->take_control_of(& iop->public))
+-			warning(_("input parser `%s' failed to open `%s'"),
++			awk_warning(_("input parser `%s' failed to open `%s'"),
+ 					ip->name, iop->public.name);
+ 		else
+ 			iop->valid = true;
+@@ -3225,7 +3236,7 @@
+ 
+ 	if (op != NULL) {
+ 		if (! op->take_control_of(outbuf)) {
+-			warning(_("output wrapper `%s' failed to open `%s'"),
++			awk_warning(_("output wrapper `%s' failed to open `%s'"),
+ 					op->name, outbuf->name);
+ 			return false;
+ 		}
+@@ -3284,7 +3295,7 @@
+ 		if (rp->iop == NULL)
+ 			rp->iop = iop_alloc(INVALID_HANDLE, name, 0);
+ 		if (! tw->take_control_of(name, & rp->iop->public, & rp->output)) {
+-			warning(_("two way processor `%s' failed to open `%s'"),
++			awk_warning(_("two way processor `%s' failed to open `%s'"),
+ 					tw->name, name);
+ 			return false;
+ 		}
+@@ -3353,7 +3364,7 @@
+ 
+ 	if (fd != INVALID_HANDLE)
+ 		fstat(fd, & iop->public.sbuf);
+-#if defined(__EMX__) || defined(__MINGW32__)
++#if defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
+ 	else if (errno_val == EISDIR) {
+ 		iop->public.sbuf.st_mode = (_S_IFDIR | _S_IRWXU);
+ 		iop->public.fd = FAKE_FD_VALUE;
+@@ -3541,7 +3552,7 @@
+ 	 */
+ 	/* Thus, the check for \n here; big speedup ! */
+ 	if (rs != '\n' && gawk_mb_cur_max > 1) {
+-		int len = iop->dataend - bp;
++		int len = (int)(iop->dataend - bp);
+ 		bool found = false;
+ 
+ 		memset(& mbs, 0, sizeof(mbstate_t));
+@@ -3559,7 +3570,7 @@
+ 				/* We treat it as a single-byte character.  */
+ 				mbclen = 1;
+ 			}
+-			len -= mbclen;
++			len -= (int)mbclen;
+ 			bp += mbclen;
+ 		} while (len > 0 && ! found);
+ 
+@@ -3701,7 +3712,7 @@
+ 	if (RSre->maybe_long) {
+ 		char *matchend = iop->off + reend;
+ 
+-		if (iop->dataend - matchend < RS->stlen)
++		if ((size_t)(iop->dataend - matchend) < RS->stlen)
+ 			return TERMNEAREND;
+ 	}
+ 
+@@ -4017,7 +4028,7 @@
+ 	} else {
+ 		assert(recm.start != NULL);
+ 		*out = recm.start;
+-		retval = recm.len;
++		retval = (int)recm.len;
+ 	}
+ 
+ 	iop->off += recm.len + recm.rt_len;
+@@ -4107,6 +4118,7 @@
+ 	if (val)
+ 		return boolval(val);
+ #endif /* HAVE_TERMIOS_H */
++	(void)command;
+ 	return false;
+ }
+ 
+@@ -4187,7 +4199,7 @@
+ 	cp += 4;
+ 
+ 	/* which localport? */
+-	isi->localport.offset = cp-str;
++	isi->localport.offset = (int)(cp - str);
+ 	while (*cp != '/') {
+ 		if (++cp >= cpend)
+ 			return false;
+@@ -4196,19 +4208,19 @@
+ 	 * Require a port, let them explicitly put 0 if
+ 	 * they don't care.
+ 	 */
+-	if ((isi->localport.len = (cp-str)-isi->localport.offset) == 0)
++	if ((isi->localport.len = (int)(cp - str) - isi->localport.offset) == 0)
+ 		return false;
+ 
+ 	/* which hostname? */
+ 	if (cpend - cp < 2)
+ 		return false;
+ 	cp++;
+-	isi->remotehost.offset = cp-str;
++	isi->remotehost.offset = (int)(cp - str);
+ 	while (*cp != '/') {
+ 		if (++cp >= cpend)
+ 			return false;
+ 	}
+-	if ((isi->remotehost.len = (cp-str)-isi->remotehost.offset) == 0)
++	if ((isi->remotehost.len = (int)(cp - str) - isi->remotehost.offset) == 0)
+ 		return false;
+ 
+ 	/* which remoteport? */
+@@ -4221,10 +4233,10 @@
+ 	 * Here too, require a port, let them explicitly put 0 if
+ 	 * they don't care.
+ 	 */
+-	isi->remoteport.offset = cp-str;
++	isi->remoteport.offset = (int)(cp - str);
+ 	while (*cp != '/' && cp < cpend)
+ 		cp++;
+-	if (cp != cpend || ((isi->remoteport.len = (cp-str)-isi->remoteport.offset) == 0))
++	if (cp != cpend || ((isi->remoteport.len = (int)(cp - str) - isi->remoteport.offset) == 0))
+ 		return false;
+ 
+ #ifndef HAVE_GETADDRINFO
+@@ -4342,7 +4354,7 @@
+ #if ! defined(VMS)
+ 	fd_set readfds;
+ 	struct timeval tv;
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	/*
+ 	 * Only sockets can be read with a timeout.  Also, the FD_*
+ 	 * macros work on SOCKET type, not on int file descriptors.
+@@ -4350,7 +4362,7 @@
+ 	SOCKET s = valid_socket(fd);
+ 
+ 	if (!s)
+-		return read(fd, buf, size);
++		return read(fd, buf, (int)size);
+ #else
+ 	int s = fd;
+ #endif
+@@ -4371,7 +4383,7 @@
+ 		return -1;
+ 
+ 	if (FD_ISSET(s, & readfds))
+-		return read(fd, buf, size);
++		return read(fd, buf, (int)size);
+ 	/* else
+ 		timed out */
+ 
+@@ -4427,13 +4439,13 @@
+ gawk_fclose(FILE *fp, void *opaque)
+ {
+ 	int result;
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	SOCKET s = valid_socket (fileno(fp));
+ #endif
+ 	(void) opaque;
+ 
+ 	result =  fclose(fp);
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	if (s && closesocket(s) == SOCKET_ERROR)
+ 		result = -1;
+ #endif
+--- orig/gawk-5.0.1/main.c	2019-06-06 20:24:36.000000000 +0300
++++ gawk-5.0.1/main.c	2019-12-11 12:34:52.615446700 +0300
+@@ -29,6 +29,10 @@
+ #include "awk.h"
+ #include "getopt.h"
+ 
++#ifdef _MSC_VER
++#include <process.h> /* for getpid */
++#endif
++
+ #ifdef HAVE_MCHECK_H
+ #include <mcheck.h>
+ #endif
+@@ -339,7 +343,7 @@
+ 	if (do_posix) {
+ 		use_lc_numeric = true;
+ 		if (do_traditional)	/* both on command line */
+-			warning(_("`--posix' overrides `--traditional'"));
++			awk_warning(_("`--posix' overrides `--traditional'"));
+ 		else
+ 			do_flags |= DO_TRADITIONAL;
+ 			/*
+@@ -350,12 +354,12 @@
+ 
+ 	if (do_traditional && do_non_decimal_data) {
+ 		do_flags &= ~DO_NON_DEC_DATA;
+-		warning(_("`--posix'/`--traditional' overrides `--non-decimal-data'"));
++		awk_warning(_("`--posix'/`--traditional' overrides `--non-decimal-data'"));
+ 	}
+ 
+ 	if (do_binary) {
+ 		if (do_posix)
+-			warning(_("`--posix' overrides `--characters-as-bytes'"));
++			awk_warning(_("`--posix' overrides `--characters-as-bytes'"));
+ 		else
+ 			gawk_mb_cur_max = 1;	/* hands off my data! */
+ #if defined(LC_ALL)
+@@ -364,7 +368,7 @@
+ 	}
+ 
+ 	if (do_lint && os_is_setuid())
+-		warning(_("running %s setuid root may be a security problem"), myname);
++		awk_warning(_("running %s setuid root may be a security problem"), myname);
+ 
+ 	if (do_debug)	/* Need to register the debugger pre-exec hook before any other */
+ 		init_debug();
+@@ -652,7 +656,7 @@
+ 	fflush(fp);
+ 
+ 	if (ferror(fp)) {
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 		if (errno == 0 || errno == EINVAL)
+ 			w32_maybe_set_errno();
+ #endif
+@@ -661,9 +665,9 @@
+ 			die_via_sigpipe();
+ 
+ 		if (fp == stdout)
+-			warning(_("error writing standard output (%s)"), strerror(errno));
++			awk_warning(_("error writing standard output (%s)"), strerror(errno));
+ 		else if (fp == stderr)
+-			warning(_("error writing standard error (%s)"), strerror(errno));
++			awk_warning(_("error writing standard error (%s)"), strerror(errno));
+ 
+ 		// some other problem than SIGPIPE
+ 		exit(EXIT_FAILURE);
+@@ -679,6 +683,7 @@
+ {
+ 	static const char blurb_part1[] =
+ 	  N_("Copyright (C) 1989, 1991-%d Free Software Foundation.\n\
++Patched by: Michael M. Builov <mbuilov@gmail.com>.\n\
+ \n\
+ This program is free software; you can redistribute it and/or modify\n\
+ it under the terms of the GNU General Public License as published by\n\
+@@ -702,13 +707,13 @@
+ 	fflush(stdout);
+ 
+ 	if (ferror(stdout)) {
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 		if (errno == 0 || errno == EINVAL)
+ 			w32_maybe_set_errno();
+ #endif
+ 		/* don't warn about stdout if EPIPE, but do error exit */
+ 		if (errno != EPIPE)
+-			warning(_("error writing standard output (%s)"), strerror(errno));
++			awk_warning(_("error writing standard output (%s)"), strerror(errno));
+ 		exit(EXIT_FAILURE);
+ 	}
+ 
+@@ -1598,7 +1603,7 @@
+ 
+ 		case 'e':
+ 			if (optarg[0] == '\0')
+-				warning(_("empty argument to `-e/--source' ignored"));
++				awk_warning(_("empty argument to `-e/--source' ignored"));
+ 			else
+ 				(void) add_srcfile(SRC_CMDLINE, optarg, srcfiles, NULL, NULL);
+ 			break;
+@@ -1659,12 +1664,12 @@
+ 
+ 		case 'p':
+ 			if (do_pretty_print)
+-				warning(_("`--profile' overrides `--pretty-print'"));
++				awk_warning(_("`--profile' overrides `--pretty-print'"));
+ 			do_flags |= DO_PROFILE;
+ 			/* fall through */
+ 		case 'o':
+ 			if (c == 'o' && do_profile)
+-				warning(_("`--profile' overrides `--pretty-print'"));
++				awk_warning(_("`--profile' overrides `--pretty-print'"));
+ 			do_flags |= DO_PRETTY_PRINT;
+ 			if (optarg != NULL)
+ 				set_prof_file(optarg);
+@@ -1676,7 +1681,7 @@
+ #ifdef HAVE_MPFR
+ 			do_flags |= DO_MPFR;
+ #else
+-			warning(_("-M ignored: MPFR/GMP support not compiled in"));
++			awk_warning(_("-M ignored: MPFR/GMP support not compiled in"));
+ #endif
+ 			break;
+ 
+@@ -1822,6 +1827,8 @@
+ 	return "vms";
+ #elif defined(__MINGW32__)
+ 	return "mingw";
++#elif defined(_MSC_VER)
++	return "windows";
+ #elif defined(__DJGPP__)
+ 	return "djgpp";
+ #elif defined(__EMX__)
+--- orig/gawk-5.0.1/missing_d/strftime.c	2017-12-14 20:53:45.000000000 +0300
++++ gawk-5.0.1/missing_d/strftime.c	2019-12-11 12:34:52.617446800 +0300
+@@ -55,7 +55,9 @@
+ # endif
+ #endif
+ #if HAVE_TZNAME
+-#ifndef __MINGW32__
++#ifdef _MSC_VER
++#define tzname _tzname
++#elif !defined(__MINGW32__)
+ extern char *tzname[];
+ #endif
+ #endif
+@@ -367,8 +369,8 @@
+ #   define TOLOWER(Ch, L) tolower (Ch)
+ #  endif
+ # else
+-#  define TOUPPER(Ch, L) (islower (Ch) ? toupper (Ch) : (Ch))
+-#  define TOLOWER(Ch, L) (isupper (Ch) ? tolower (Ch) : (Ch))
++#  define TOUPPER(Ch, L) (islower (Ch) ? toupper (Ch) : (int)(Ch))
++#  define TOLOWER(Ch, L) (isupper (Ch) ? tolower (Ch) : (int)(Ch))
+ # endif
+ #endif
+ /* We don't use `isdigit' here since the locale dependent
+@@ -388,7 +390,10 @@
+      LOCALE_PARAM_DECL
+ {
+   while (len-- > 0)
+-    dest[len] = TOLOWER ((UCHAR_T) src[len], loc);
++    {
++      const CHAR_T ch = src[len];
++      dest[len] = TOLOWER ((UCHAR_T) ch, loc);
++    }
+   return dest;
+ }
+ 
+@@ -403,7 +408,10 @@
+      LOCALE_PARAM_DECL
+ {
+   while (len-- > 0)
+-    dest[len] = TOUPPER ((UCHAR_T) src[len], loc);
++    {
++      const CHAR_T ch = src[len];
++      dest[len] = TOUPPER ((UCHAR_T) ch, loc);
++    }
+   return dest;
+ }
+ 
+--- orig/gawk-5.0.1/missing_d/timegm.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/missing_d/timegm.c	2019-12-11 12:34:52.618446800 +0300
+@@ -13,7 +13,7 @@
+ 	if (tz)
+ 		tz = estrdup(tz, strlen(tz));
+ 	if (setenv("TZ", tzreq, 1) < 0) {
+-		warning(_("setenv(TZ, %s) failed (%s)"), tzreq, strerror(errno));
++		awk_warning(_("setenv(TZ, %s) failed (%s)"), tzreq, strerror(errno));
+ 		return -1;
+ 	}
+ 	tzset();
+--- orig/gawk-5.0.1/node.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/node.c	2019-12-11 12:34:52.620446900 +0300
+@@ -552,7 +552,7 @@
+ 		case 'b':
+ 		case 'f':
+ 		case 'r':
+-			warning(_("old awk does not support the `\\%c' escape sequence"), c);
++			awk_warning(_("old awk does not support the `\\%c' escape sequence"), c);
+ 			break;
+ 		}
+ 	}
+@@ -609,7 +609,7 @@
+ 		if (do_posix)
+ 			return ('x');
+ 		if (! isxdigit((unsigned char) (*string_ptr)[0])) {
+-			warning(_("no hex digits in `\\x' escape sequence"));
++			awk_warning(_("no hex digits in `\\x' escape sequence"));
+ 			return ('x');
+ 		}
+ 		start = *string_ptr;
+@@ -645,7 +645,7 @@
+ 		if (! warned[uc]) {
+ 			warned[uc] = true;
+ 
+-			warning(_("escape sequence `\\%c' treated as plain `%c'"), uc, uc);
++			awk_warning(_("escape sequence `\\%c' treated as plain `%c'"), uc, uc);
+ 		}
+ 	}
+ 		return c;
+@@ -781,7 +781,7 @@
+ 			/* Warn the user something's wrong */
+ 			if (! warned) {
+ 				warned = true;
+-				warning(_("Invalid multibyte data detected. There may be a mismatch between your data and your locale."));
++				awk_warning(_("Invalid multibyte data detected. There may be a mismatch between your data and your locale."));
+ 			}
+ 
+ 			/*
+--- orig/gawk-5.0.1/nonposix.h	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/nonposix.h	2019-12-11 12:34:52.621447000 +0300
+@@ -30,7 +30,7 @@
+ 
+ #define FAKE_FD_VALUE 42
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ /* Replacements for sys/wait.h macros.  */
+ # define WEXITSTATUS(stv) (((unsigned)(stv)) & ~0xC0000000)
+ /* MS-Windows programs that crash due to a fatal exception exit with
+@@ -65,13 +65,19 @@
+ #endif
+ #define setlocale(c,v) w32_setlocale(c,v)
+ 
+-#endif	/* __MINGW32__ */
++#endif	/* __MINGW32__ || _MSC_VER */
+ 
+-#if defined(VMS) || defined(__DJGPP__) || defined(__MINGW32__)
++#ifdef _MSC_VER
++#ifndef S_ISDIR
++#define S_ISDIR(m) (((m)&S_IFMT) == S_IFDIR)
++#endif
++#endif
++
++#if defined(VMS) || defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ int getpgrp(void);
+ #endif
+ 
+-#if defined(__DJGPP__) || defined(__MINGW32__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ int getppid(void);
+ #endif
+ 
+--- orig/gawk-5.0.1/pc/config.h	2019-06-18 20:56:02.000000000 +0300
++++ gawk-5.0.1/pc/config.h	2019-12-11 12:34:52.623447100 +0300
+@@ -43,7 +43,7 @@
+ 
+ /* Define to 1 if you have the declaration of `tzname', and to 0 if you don't.
+    */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_DECL_TZNAME 1
+ #endif
+ 
+@@ -57,12 +57,12 @@
+ #undef HAVE_FWRITE_UNLOCKED
+ 
+ /* Define to 1 if you have the `gai_strerror' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_GAI_STRERROR 1
+ #endif
+ 
+ /* have getaddrinfo */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_GETADDRINFO 1
+ #endif
+ 
+@@ -85,37 +85,37 @@
+ #undef HAVE_ICONV
+ 
+ /* Define to 1 if the system has the type `intmax_t'. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_INTMAX_T 1
+ #endif
+ 
+ /* Define to 1 if you have the <inttypes.h> header file. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_INTTYPES_H 1
+ #endif
+ 
+ /* Define to 1 if you have the `isascii' function. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_ISASCII 1
+ #endif
+ 
+ /* Define to 1 if you have the `iswctype' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_ISWCTYPE 1
+ #endif
+ 
+ /* Define to 1 if you have the `iswlower' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_ISWLOWER 1
+ #endif
+ 
+ /* Define to 1 if you have the `iswupper' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_ISWUPPER 1
+ #endif
+ 
+ /* Define if you have <langinfo.h> and nl_langinfo(CODESET). */
+-#if defined(__DJGPP__) || defined(__MINGW32__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_LANGINFO_CODESET 1
+ #endif
+ 
+@@ -132,7 +132,7 @@
+ #undef HAVE_LIBSIGSEGV
+ 
+ /* Define to 1 if you have the <locale.h> header file. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_LOCALE_H 1
+ #endif
+ 
+@@ -140,12 +140,12 @@
+ #undef HAVE_LONG_LONG_INT
+ 
+ /* Define to 1 if you have the `mbrlen' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_MBRLEN 1
+ #endif
+ 
+ /* Define to 1 if mbrtowc and mbstate_t are properly declared. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_MBRTOWC 1
+ #endif
+ 
+@@ -162,7 +162,7 @@
+ #undef HAVE_MEMCPY_ULONG
+ 
+ /* Define to 1 if you have the `memmove' function. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_MEMMOVE 1
+ #endif
+ 
+@@ -198,12 +198,12 @@
+ #undef HAVE_POSIX_OPENPT
+ 
+ /* Define to 1 if you have the `setenv' function. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_SETENV 1
+ #endif
+ 
+ /* Define to 1 if you have the `setlocale' function. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_SETLOCALE 1
+ #endif
+ 
+@@ -214,22 +214,22 @@
+ #undef HAVE_SIGPROCMASK
+ 
+ /* Define to 1 if you have the `snprintf' function. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_SNPRINTF 1
+ #endif
+ 
+ /* newer systems define this type here */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_SOCKADDR_STORAGE 1
+ #endif
+ 
+ /* we have sockets on this system */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_SOCKETS 1
+ #endif
+ 
+ /* Define to 1 if stdbool.h conforms to C99. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_STDBOOL_H 1
+ #endif
+ 
+@@ -239,19 +239,22 @@
+ #endif
+ 
+ /* Define to 1 if you have the <stdint.h> header file. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_STDINT_H 1
+ #endif
+ 
+ /* Define to 1 if you have the <stdlib.h> header file. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_STDLIB_H 1
+ #endif
+ 
+ /* Define to 1 if you have the `strcasecmp' function. */
+-#ifdef __DJGPP__
++#if defined(__DJGPP__) || defined(__EMX__) || defined(_MSC_VER)
+ #define HAVE_STRCASECMP 1
+ #endif
++#if defined(__EMX__) || defined(_MSC_VER)
++#define strcasecmp stricmp
++#endif
+ 
+ /* Define to 1 if you have the `strchr' function. */
+ #define HAVE_STRCHR 1
+@@ -265,7 +268,7 @@
+ #define HAVE_STRERROR 1
+ 
+ /* Define to 1 if you have the `strftime' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ /* MinGW uses the replacement from missing_d, to support the %e specifier.  */
+ #define strftime rpl_strftime
+ #else
+@@ -276,14 +279,14 @@
+ #define HAVE_STRINGIZE 1
+ 
+ /* Define to 1 if you have the <strings.h> header file. */
+-#define HAVE_STRINGS_H 1
++/*#define HAVE_STRINGS_H 1*/
+ 
+ /* Define to 1 if you have the <string.h> header file. */
+ #define HAVE_STRING_H 1
+ 
+ /* Define to 1 if you have the `strncasecmp' function. */
+ #define HAVE_STRNCASECMP 1
+-#ifdef __EMX__
++#if defined(__EMX__) || defined(_MSC_VER)
+ #define strncasecmp strnicmp
+ #endif
+ 
+@@ -294,7 +297,7 @@
+ #define HAVE_STRTOD 1
+ 
+ /* Define to 1 if you have the `strtoul' function. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_STRTOUL 1
+ #endif
+ 
+@@ -305,7 +308,7 @@
+ #undef HAVE_STRUCT_PASSWD_PW_PASSWD
+ 
+ /* Define to 1 if `st_blksize' is a member of `struct stat'. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_STRUCT_STAT_ST_BLKSIZE 1
+ #endif
+ 
+@@ -332,7 +335,7 @@
+ #undef HAVE_SYS_SOCKET_H
+ 
+ /* Define to 1 if you have the <sys/stat.h> header file. */
+-#if defined(__MINGW32__) || defined(__DJGPP__)
++#if defined(__MINGW32__) || defined(__DJGPP__) || defined(_MSC_VER)
+ #define HAVE_SYS_STAT_H 1
+ #endif
+ 
+@@ -365,12 +368,12 @@
+ #undef HAVE_TM_ZONE
+ 
+ /* Define to 1 if you have the `towlower' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_TOWLOWER 1
+ #endif
+ 
+ /* Define to 1 if you have the `towupper' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_TOWUPPER 1
+ #endif
+ 
+@@ -382,7 +385,7 @@
+ #define HAVE_TZSET 1
+ 
+ /* Define to 1 if the system has the type `uintmax_t'. */
+-#if defined(__DJGPP__) || defined(__MINGW32__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_UINTMAX_T 1
+ #endif
+ 
+@@ -395,7 +398,7 @@
+ #undef HAVE_UNSIGNED_LONG_LONG_INT
+ 
+ /* Define to 1 if you have the `usleep' function. */
+-#if defined(__DJGPP__) || defined(__MINGW32__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_USLEEP 1
+ #endif
+ 
+@@ -403,37 +406,37 @@
+ #undef HAVE_WAITPID
+ 
+ /* Define to 1 if you have the <wchar.h> header file. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_WCHAR_H 1
+ #endif
+ 
+ /* Define to 1 if you have the `wcrtomb' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_WCRTOMB 1
+ #endif
+ 
+ /* Define to 1 if you have the `wcscoll' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_WCSCOLL 1
+ #endif
+ 
+ /* Define to 1 if you have the `wctype' function. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_WCTYPE 1
+ #endif
+ 
+ /* Define to 1 if you have the <wctype.h> header file. */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_WCTYPE_H 1
+ #endif
+ 
+ /* systems should define this type here */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_WCTYPE_T 1
+ #endif
+ 
+ /* systems should define this type here */
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #define HAVE_WINT_T 1
+ #endif
+ 
+@@ -493,16 +496,21 @@
+ #undef TIME_T_IN_SYS_TYPES_H
+ 
+ /* Define to 1 if you can safely include both <sys/time.h> and <time.h>. */
++#ifndef _MSC_VER
+ #define TIME_WITH_SYS_TIME 1
++#endif
+ 
+ /* Define to 1 if your <sys/time.h> declares `struct tm'. */
+ #undef TM_IN_SYS_TIME
+ 
++/* Define to 1 if you have the `GetSystemTimeAsFileTime' function. */
++#define HAVE_GETSYSTEMTIMEASFILETIME 1
++
+ /* Define to 1 if the character set is EBCDIC */
+ #undef USE_EBCDIC
+ 
+ /* This is required to compile Gnulib regex code.  */
+-#if defined(__DJGPP__) || defined(__MINGW32__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ #define _GNU_SOURCE 1
+ #endif
+ /* Enable extensions on AIX 3, Interix.  */
+@@ -612,6 +620,13 @@
+ 
+ /* Define to `int' if <sys/types.h> does not define. */
+ #undef ssize_t
++#ifdef _MSC_VER
++#ifdef _WIN64
++#define ssize_t long long int
++#else
++#define ssize_t int
++#endif
++#endif
+ 
+ /* Define to `int' if <sys/types.h> doesn't define. */
+ #undef uid_t
+@@ -640,8 +655,3 @@
+ #ifndef __DJGPP__
+ #define HAVE_POPEN_H 1
+ #endif
+-
+-#if defined(__EMX__)
+-#define strcasecmp stricmp
+-#define strncasecmp strnicmp
+-#endif
+--- orig/gawk-5.0.1/pc/gawkmisc.pc	2019-04-05 10:38:15.000000000 +0300
++++ gawk-5.0.1/pc/gawkmisc.pc	2019-12-11 14:52:27.335455800 +0300
+@@ -41,7 +41,7 @@
+ static const char* _os2_unixroot_path(const char *path);
+ #endif
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ #ifdef HAVE_SOCKETS
+ #include <socket.h>
+ 
+@@ -59,6 +59,10 @@
+ #include <windows.h>
+ #endif
+ 
++#if ! defined(S_ISREG) && defined(S_IFREG)
++#define	S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
++#endif
++
+ /* gawk_name --- pull out the "gawk" part from how the OS called us */
+ 
+ char *
+@@ -230,7 +234,7 @@
+ 		warning("%s %s `%s': could not set close-on-exec: %s",
+ 			what, dir, name, strerror(errno));
+ #endif
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 	HANDLE fh = (HANDLE)_get_osfhandle(fd);
+ 
+ 	if (fh && fh != INVALID_HANDLE_VALUE)
+@@ -269,6 +273,9 @@
+ #ifdef S_IFIFO
+ 	case S_IFIFO:
+ #endif
++#ifdef _S_IFIFO
++	case _S_IFIFO:
++#endif
+ 		return true;
+ 	case S_IFDIR:
+ 		*isdir = true;
+@@ -596,7 +603,7 @@
+ 
+ #endif /* __EMX__ */
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 
+ extern void *xmalloc (size_t);
+ 
+@@ -632,7 +639,7 @@
+ 
+ /* MinGW 3.21 and later defines usleep as an inline function in
+    unistd.h, which conflicts with the version below.  */
+-#if __MINGW32_MAJOR_VERSION + (__MINGW32_MINOR_VERSION > 20) < 4
++#if (__MINGW32_MAJOR_VERSION + (__MINGW32_MINOR_VERSION > 20) < 4) || defined(_MSC_VER)
+ int
+ usleep(unsigned int usec)
+ {
+@@ -653,7 +660,7 @@
+ #include <wchar.h>
+ 
+ int
+-wctob (wint_t wc)
++awk_wctob (wint_t wc)
+ {
+   char buf[64];
+ 
+@@ -788,6 +795,8 @@
+     }
+ }
+ 
++#include <process.h> /* for _spawnvp */
++
+ /*
+  * On MS-Windows with MinGW, execvp causes the shell and the re-exec'ed
+  * dgawk to compete for the keyboard input.
+@@ -1087,9 +1096,9 @@
+     }
+ }
+ 
+-#endif	/* __MINGW32__ */
++#endif	/* __MINGW32__ || _MSC_VER */
+ 
+-#if defined(__DJGPP__) || defined(__MINGW32__) || defined(__EMX__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(__EMX__) || defined(_MSC_VER)
+ 
+ void
+ init_sockets(void)
+@@ -1104,7 +1113,7 @@
+ #endif
+ }
+ 
+-#endif	/* __DJGPP__ || __MINGW32__ */
++#endif	/* __DJGPP__ || __MINGW32__ || __EMX__ || _MSC_VER */
+ 
+ #ifdef __DJGPP__
+ 
+--- orig/gawk-5.0.1/pc/getid.c	2017-12-14 20:53:45.000000000 +0300
++++ gawk-5.0.1/pc/getid.c	2019-12-11 12:34:52.626447300 +0300
+@@ -1,4 +1,4 @@
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 
+ #include <process.h>
+ 
+@@ -22,16 +22,16 @@
+   return (0);
+ }
+ 
+-#endif	/* __MINGW32__ */
++#endif	/* __MINGW32__ || _MSC_VER */
+ 
+ int getpgrp(void)
+ {
+   return (0);
+ }
+ 
+-#if defined(__DJGPP__) || defined(__MINGW32__)
++#if defined(__DJGPP__) || defined(__MINGW32__) || defined(_MSC_VER)
+ int getppid(void)
+ {
+   return (0);
+ }
+-#endif	/* __DJGPP__ || __MINGW32__ */
++#endif	/* __DJGPP__ || __MINGW32__ || _MSC_VER */
+--- orig/gawk-5.0.1/pc/popen.c	2019-04-05 10:29:20.000000000 +0300
++++ gawk-5.0.1/pc/popen.c	2019-12-11 12:34:52.627447300 +0300
+@@ -28,11 +28,16 @@
+  * Currently, only MSC (running under DOS) and MINGW versions are managed.
+  */
+ 
+-#if defined(__MINGW32__)
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+ 
++#ifdef _MSC_VER
++#define popen(cmd, mode) _popen(cmd, mode)
++#define pclose(file)     _pclose(file)
++#endif
++
+ #if 0
+ static int
+ unixshell(char *p)
+@@ -193,7 +198,7 @@
+ }
+ #endif
+ 
+-#else  /* !__MINGW32__ */
++#else  /* !__MINGW32__ && !_MSC_VER */
+ #define os_system(cmd) system(cmd)
+ #endif
+ 
+@@ -210,7 +215,7 @@
+       return NULL;
+     strncpy(curmode, mode, 3); curmode[3] = '\0';
+ 
+-#if defined(__MINGW32__)
++#if defined(__MINGW32__) || defined(_MSC_VER)
+     current = popen(command, mode);
+     cur = fileno(current);
+     strcpy(pipes[cur].pmode, curmode);
+@@ -257,7 +262,7 @@
+     int cur = fileno(current);
+     int fd, rval;
+ 
+-#if defined(__MINGW32__)
++#if defined(__MINGW32__) || defined(_MSC_VER)
+     rval = pclose(current);
+     *pipes[cur].pmode = '\0';
+     return rval;
+--- orig/gawk-5.0.1/pc/popen.h	2017-12-14 20:53:45.000000000 +0300
++++ gawk-5.0.1/pc/popen.h	2019-12-11 12:34:52.629447500 +0300
+@@ -10,11 +10,11 @@
+ # define pclose(f)	os_pclose(f)
+   extern FILE *os_popen( const char *, const char * );
+   extern int  os_pclose( FILE * );
+-# ifdef __MINGW32__
++# if defined __MINGW32__ || defined _MSC_VER
+ #  define system(c)	os_system(c)
+    extern int os_system( const char * );
+ #  define SIGKILL	9
+    extern int kill( int, int );
+    extern char *quote_cmd( const char * );
+-# endif	 /* __MINGW32__ */
++# endif	 /* __MINGW32__ || _MSC_VER */
+ #endif	/* !__DJGPP__ */
+--- orig/gawk-5.0.1/pc/socket.h	2019-04-05 10:29:20.000000000 +0300
++++ gawk-5.0.1/pc/socket.h	2019-12-11 12:34:52.630447500 +0300
+@@ -3,7 +3,7 @@
+ #ifndef GAWK_SOCKET_H
+ #define GAWK_SOCKET_H
+ 
+-#ifdef __MINGW32__
++#if defined(__MINGW32__) || defined(_MSC_VER)
+ 
+ #include <io.h>
+ 
+@@ -40,6 +40,6 @@
+ int socket_to_fd (SOCKET);
+ SOCKET valid_socket (int);
+ 
+-#endif	/* __MINGW32__ */
++#endif	/* __MINGW32__ || _MSC_VER */
+ 
+ #endif	/* GAWK_SOCKET_H */
+--- orig/gawk-5.0.1/profile.c	2019-04-05 10:38:16.000000000 +0300
++++ gawk-5.0.1/profile.c	2019-12-11 12:34:52.632447600 +0300
+@@ -107,9 +107,9 @@
+ 			(void) close(fd);
+ 
+ 		errno = e;
+-		warning(_("could not open `%s' for writing: %s"),
++		awk_warning(_("could not open `%s' for writing: %s"),
+ 				file, strerror(errno));
+-		warning(_("sending profile to standard error"));
++		awk_warning(_("sending profile to standard error"));
+ 		prof_fp = stderr;
+ 	}
+ }
+@@ -352,7 +352,7 @@
+ 			m = pc->memory;
+ 			switch (m->type) {
+ 			case Node_param_list:
+-				pp_push(pc->opcode, func_params[m->param_cnt].param, DONT_FREE, pc->comment);
++				pp_push(pc->opcode, func_params[m->param_cnt].awk_param, DONT_FREE, pc->comment);
+ 				break;
+ 
+ 			case Node_var:
+@@ -958,7 +958,7 @@
+ 			array = t1->pp_str;
+ 			m = ip1->forloop_cond->array_var;
+ 			if (m->type == Node_param_list)
+-				item = func_params[m->param_cnt].param;
++				item = func_params[m->param_cnt].awk_param;
+ 			else
+ 				item = m->vname;
+ 			indent(ip1->forloop_body->exec_count);
+@@ -1982,7 +1982,7 @@
+ 	pcount = func->param_cnt;
+ 	func_params = func->fparms;
+ 	for (j = 0; j < pcount; j++) {
+-		fprintf(prof_fp, "%s", func_params[j].param);
++		fprintf(prof_fp, "%s", func_params[j].awk_param);
+ 		if (j < pcount - 1)
+ 			fprintf(prof_fp, ", ");
+ 	}
+--- orig/gawk-5.0.1/re.c	2019-04-05 10:38:16.000000000 +0300
++++ gawk-5.0.1/re.c	2019-12-11 12:34:52.633447700 +0300
+@@ -169,7 +169,7 @@
+ 				static bool warned[2];
+ 
+ 				if (! warned[c - '8']) {
+-					warning(_("regexp escape sequence `\\%c' treated as plain `%c'"), c, c);
++					awk_warning(_("regexp escape sequence `\\%c' treated as plain `%c'"), c, c);
+ 					warned[c - '8'] = true;
+ 				}
+ 			}
+@@ -188,7 +188,7 @@
+ 					static bool warned[256];
+ 
+ 					if (! warned[c & 0xFF]) {
+-						warning(_("regexp escape sequence `\\%c' is not a known regexp operator"), c);
++						awk_warning(_("regexp escape sequence `\\%c' is not a known regexp operator"), c);
+ 						warned[c & 0xFF] = true;
+ 					}
+ 				}
+@@ -647,7 +647,7 @@
+ 	}
+ 
+ 	if (found && ! classes[i].warned) {
+-		warning(_("regexp component `%.*s' should probably be `[%.*s]'"),
++		awk_warning(_("regexp component `%.*s' should probably be `[%.*s]'"),
+ 				len, sp2, len, sp2);
+ 		classes[i].warned = true;
+ 	}
+--- orig/gawk-5.0.1/replace.c	2019-04-05 10:38:16.000000000 +0300
++++ gawk-5.0.1/replace.c	2019-12-11 12:34:52.634447700 +0300
+@@ -59,12 +59,12 @@
+ #endif	/* HAVE_STRERROR */
+ 
+ #ifndef HAVE_STRFTIME
+-# ifdef __MINGW32__
++# if defined(__MINGW32__) || defined(_MSC_VER)
+ /* Need to use underlying_strftime in replacement strftime.  */
+ #  define HAVE_STRFTIME 1
+ # endif
+ #include "missing_d/strftime.c"
+-# ifdef __MINGW32__
++# if defined(__MINGW32__) || defined(_MSC_VER)
+ #  undef HAVE_STRFTIME
+ # endif
+ #endif	/* HAVE_STRFTIME */
+--- orig/gawk-5.0.1/support/dfa.c	2019-05-22 21:00:52.000000000 +0300
++++ gawk-5.0.1/support/dfa.c	2019-12-11 12:34:52.636447900 +0300
+@@ -88,6 +88,11 @@
+ #include "mbsupport.h"
+ #endif
+ 
++#if defined(__MINGW32__) || defined(_MSC_VER)
++int awk_wctob (wint_t wc); /* defined in pc/gawkmisc.pc */
++#define wctob(wc) awk_wctob(wc)
++#endif
++
+ #ifdef GAWK
+ static int
+ is_blank (int c)
+--- orig/gawk-5.0.1/support/getopt.c	2019-04-05 10:37:55.000000000 +0300
++++ gawk-5.0.1/support/getopt.c	2019-12-11 12:34:52.638448000 +0300
+@@ -284,6 +284,7 @@
+   /* Start processing options with ARGV-element 1 (since ARGV-element 0
+      is the program name); the sequence of previously skipped
+      non-option ARGV-elements is empty.  */
++  (void)argc, (void)argv;
+ 
+   d->__first_nonopt = d->__last_nonopt = d->optind;
+ 
+@@ -549,7 +550,7 @@
+ 
+       for (nameend = d->__nextchar; *nameend && *nameend != '='; nameend++)
+ 	/* Do nothing.  */ ;
+-      namelen = nameend - d->__nextchar;
++      namelen = (unsigned)(nameend - d->__nextchar);
+ 
+       /* Test all long options for either exact match
+ 	 or abbreviated matches.  */
+--- orig/gawk-5.0.1/symbol.c	2019-04-05 10:38:16.000000000 +0300
++++ gawk-5.0.1/symbol.c	2019-12-11 12:34:52.640448100 +0300
+@@ -141,7 +141,7 @@
+ 
+ 	for (i = 0, p = parms; i < pcount; i++, p++) {
+ 		p->type = Node_param_list;
+-		p->param = pnames[i];	/* shadows pname and vname */
++		p->awk_param = pnames[i];	/* shadows pname and vname */
+ 		p->param_cnt = i;
+ 	}
+ 
+@@ -166,7 +166,7 @@
+ 		return;
+ 
+ 	for (i = 0; i < pcount; i++)
+-		(void) install(parms[i].param, parms + i, Node_param_list);
++		(void) install(parms[i].awk_param, parms + i, Node_param_list);
+ }
+ 
+ 
+@@ -249,7 +249,7 @@
+ 			/* function parameters of type Node_param_list */
+ 			for (i = 0; i < pcount; i++) {
+ 				n = r->fparms + i;
+-				efree(n->param);
++				efree(n->awk_param);
+ 			}
+ 			efree(r->fparms);
+ 		}
+@@ -680,14 +680,14 @@
+ 			/* compare to function names */
+ 
+ 			/* use a fake node to avoid malloc/free of make_string */
+-			n.stptr = f->fparms[j].param;
+-			n.stlen = strlen(f->fparms[j].param);
++			n.stptr = f->fparms[j].awk_param;
++			n.stlen = strlen(f->fparms[j].awk_param);
+ 
+ 			if (in_array(func_table, & n)) {
+ 				error(
+ 			_("function `%s': can't use function `%s' as a parameter name"),
+ 					list[i]->stptr,
+-					f->fparms[j].param);
++					f->fparms[j].awk_param);
+ 				result = false;
+ 			}
+ 		}
+--- orig/gawk-5.0.1/test/childin.awk	2017-12-14 20:49:00.000000000 +0300
++++ gawk-5.0.1/test/childin.awk	2019-12-11 16:00:12.959996200 +0300
+@@ -1 +1,2 @@
+-BEGIN { "cat" | getline; print; close("cat") }
++#BEGIN { "cat" | getline; print; close("cat") }
++BEGIN { "find /v \"\"" | getline; print; close("find /v \"\"") }
+--- orig/gawk-5.0.1/test/exitval2.awk	2017-12-14 20:49:00.000000000 +0300
++++ gawk-5.0.1/test/exitval2.awk	2019-12-11 16:53:54.706269500 +0300
+@@ -1,3 +1,4 @@
+-BEGIN { print "foo" | "read x ; echo $x ; exit 12" }
++#BEGIN { print "foo" | "read x ; echo $x ; exit 12" }
++BEGIN { print "foo" | "set /p x= & cmd /c \"(echo.%x%)\" & exit 12" }
+ # this should still exit 0, as pointed out by kenny mccormack in
+ # comp.lang.awk on 2 feb 2005
