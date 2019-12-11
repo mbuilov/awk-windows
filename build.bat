@@ -237,6 +237,8 @@ SET AWKPATH=.
 @call :testsimple_in      funstack                                || exit /b 1
 @call :testsimple_in      getline                                 || exit /b 1
 @call :testsimple         getline2 getline2.awk getline2.awk      || exit /b 1
+@call :testsimple         getline3                                || exit /b 1
+@call :testsimple_in      getline4                                || exit /b 1
 
 :: more tests to come...
 @rem.
