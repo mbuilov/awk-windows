@@ -142,148 +142,177 @@ endlocal & set /A "CALL_STAT+=%CALL_STAT1%" & exit /b %err%
 
 set AWKPATH=.
 
-call :testsimple_in addcomma || exit /b
-call :testsimple_in anchgsub || exit /b
-call :testsimple_in anchor   || exit /b
+:: 262 basic tests
+
+call :runtest_in addcomma || exit /b
+call :runtest_in anchgsub || exit /b
+call :runtest_in anchor   || exit /b
 
 call :execq "copy argarray.in argarray.input > NUL" || exit /b
 call :execq "echo just a test | ..\gawk.exe -f argarray.awk ./argarray.input - > _argarray" || exit /b
 call :exec del /q argarray.input
 call :cmpdel argarray                               || exit /b
 
-call :testsimple_in      arrayind1                         || exit /b
-call :testsimple         arrayind2                         || exit /b
-call :testsimple         arrayind3                         || exit /b
-call :testsimple_fail    arrayparm                         || exit /b
-call :testsimple         arrayprm2                         || exit /b
-call :testsimple         arrayprm3                         || exit /b
-call :testsimple         arrayref                          || exit /b
-call :testsimple         arrymem1                          || exit /b
-call :testsimple         arryref2                          || exit /b
-call :testsimple_fail    arryref3                          || exit /b
-call :testsimple_fail    arryref4                          || exit /b
-call :testsimple_fail    arryref5                          || exit /b
-call :testsimple         arynasty                          || exit /b
-call :testsimple         arynocls -v "INPUT=arynocls.in"   || exit /b
-call :testsimple_fail    aryprm1                           || exit /b
-call :testsimple_fail    aryprm2                           || exit /b
-call :testsimple_fail    aryprm3                           || exit /b
-call :testsimple_fail    aryprm4                           || exit /b
-call :testsimple_fail    aryprm5                           || exit /b
-call :testsimple_fail    aryprm6                           || exit /b
-call :testsimple_fail    aryprm7                           || exit /b
-call :testsimple         aryprm8                           || exit /b
-call :testsimple         aryprm9                           || exit /b
-call :testsimple         arysubnm                          || exit /b
-call :testsimple         aryunasgn                         || exit /b
-call :testsimple_in      asgext                            || exit /b
+call :runtest_in      arrayind1                         || exit /b
+call :runtest         arrayind2                         || exit /b
+call :runtest         arrayind3                         || exit /b
+call :runtest_fail    arrayparm                         || exit /b
+call :runtest         arrayprm2                         || exit /b
+call :runtest         arrayprm3                         || exit /b
+call :runtest         arrayref                          || exit /b
+call :runtest         arrymem1                          || exit /b
+call :runtest         arryref2                          || exit /b
+call :runtest_fail    arryref3                          || exit /b
+call :runtest_fail    arryref4                          || exit /b
+call :runtest_fail    arryref5                          || exit /b
+call :runtest         arynasty                          || exit /b
+call :runtest         arynocls -v "INPUT=arynocls.in"   || exit /b
+call :runtest_fail    aryprm1                           || exit /b
+call :runtest_fail    aryprm2                           || exit /b
+call :runtest_fail    aryprm3                           || exit /b
+call :runtest_fail    aryprm4                           || exit /b
+call :runtest_fail    aryprm5                           || exit /b
+call :runtest_fail    aryprm6                           || exit /b
+call :runtest_fail    aryprm7                           || exit /b
+call :runtest         aryprm8                           || exit /b
+call :runtest         aryprm9                           || exit /b
+call :runtest         arysubnm                          || exit /b
+call :runtest         aryunasgn                         || exit /b
+call :runtest_in      asgext                            || exit /b
 
 call :execq "set AWKPATH=lib"
-call :testsimple         awkpath                           || exit /b
+call :runtest         awkpath                           || exit /b
 call :execq "set AWKPATH=."
 
-call :testsimple_in      assignnumfield                          || exit /b
-call :testsimple         assignnumfield2                         || exit /b
-call :testsimple_in      back89                                  || exit /b
-call :testsimple_in      backgsub                                || exit /b
-call :testsimple_fail    badassign1                              || exit /b
-call :testsimple_fail    badbuild                                || exit /b
-call :testsimple_fail    callparam                               || exit /b
-call :testsimple_in      childin                                 || exit /b
-call :testsimple         clobber                                 || exit /b
-call :testsimple         closebad                                || exit /b
-call :testsimple_in      clsflnam                                || exit /b
-call :testsimple         compare 0 1 compare.in                  || exit /b
-call :testsimple         compare2                                || exit /b
-call :testsimple_in      concat1                                 || exit /b
-call :testsimple         concat2                                 || exit /b
-call :testsimple         concat3                                 || exit /b
-call :testsimple_in      concat4                                 || exit /b
-call :testsimple         concat5                                 || exit /b
-call :testsimple         convfmt                                 || exit /b
-call :testsimple_in      datanonl                                || exit /b
-call :testsimple_fail    defref --lint                           || exit /b
-call :testsimple         delargv                                 || exit /b
-call :testsimple         delarpm2                                || exit /b
-call :testsimple         delarprm                                || exit /b
-call :testsimple_fail    delfunc                                 || exit /b
-call :testsimple_in      dfamb1                                  || exit /b
-call :testsimple         dfastress                               || exit /b
-call :testsimple         dynlj                                   || exit /b
-call :testsimple         eofsplit                                || exit /b
-call :testsimple_fail_   eofsrc1 -f eofsrc1a.awk -f eofsrc1b.awk || exit /b
-call :testsimple         exit2                                   || exit /b
-call :testsimple_ok      exitval1                                || exit /b
-call :testsimple         exitval2                                || exit /b
-call :testsimple_fail    exitval3                                || exit /b
-call :testsimple_fail    fcall_exit                              || exit /b
-call :testsimple_fail_in fcall_exit2                             || exit /b
-call :testsimple_in      fldchg                                  || exit /b
-call :testsimple_in      fldchgnf                                || exit /b
-call :testsimple_in      fldterm                                 || exit /b
-call :testsimple_fail_in fnamedat                                || exit /b
-call :testsimple_fail    fnarray                                 || exit /b
-call :testsimple_fail    fnarray2                                || exit /b
-call :testsimple_fail    fnaryscl                                || exit /b
-call :testsimple_fail    fnasgnm                                 || exit /b
-call :testsimple_fail    fnmisc                                  || exit /b
-call :testsimple         fordel                                  || exit /b
-call :testsimple         forref                                  || exit /b
-call :testsimple         forsimp                                 || exit /b
-call :testsimple_in      fsbs                                    || exit /b
-call :testsimple_in      fscaret                                 || exit /b
-call :testsimple_in      fsnul1                                  || exit /b
-call :testsimple_in      fsrs                                    || exit /b
-call :testsimple         fsspcoln  """FS=[ :]+""" fsspcoln.in    || exit /b
-call :testsimple_in      fstabplus                               || exit /b
-call :testsimple         funsemnl                                || exit /b
-call :testsimple_fail    funsmnam                                || exit /b
-call :testsimple_in      funstack                                || exit /b
-call :testsimple_in      getline                                 || exit /b
-call :testsimple         getline2 getline2.awk getline2.awk      || exit /b
-call :testsimple         getline3                                || exit /b
-call :testsimple_in      getline4                                || exit /b
+call :runtest_in      assignnumfield                          || exit /b
+call :runtest         assignnumfield2                         || exit /b
+call :runtest_in      back89                                  || exit /b
+call :runtest_in      backgsub                                || exit /b
+call :runtest_fail    badassign1                              || exit /b
+call :runtest_fail    badbuild                                || exit /b
+call :runtest_fail    callparam                               || exit /b
+call :runtest_in      childin                                 || exit /b
+call :runtest         clobber                                 || exit /b
+call :cmpdel_         clobber.ok seq                          || exit /b
+call :runtest         closebad                                || exit /b
+call :runtest_in      clsflnam                                || exit /b
+call :runtest         compare 0 1 compare.in                  || exit /b
+call :runtest         compare2                                || exit /b
+call :runtest_in      concat1                                 || exit /b
+call :runtest         concat2                                 || exit /b
+call :runtest         concat3                                 || exit /b
+call :runtest_in      concat4                                 || exit /b
+call :runtest         concat5                                 || exit /b
+call :runtest         convfmt                                 || exit /b
+call :runtest_in      datanonl                                || exit /b
+call :runtest_fail    defref --lint                           || exit /b
+call :runtest         delargv                                 || exit /b
+call :runtest         delarpm2                                || exit /b
+call :runtest         delarprm                                || exit /b
+call :runtest_fail    delfunc                                 || exit /b
+call :runtest_in      dfamb1                                  || exit /b
+call :runtest         dfastress                               || exit /b
+call :runtest         dynlj                                   || exit /b
+call :runtest         eofsplit                                || exit /b
+call :runtest_fail_   eofsrc1 -f eofsrc1a.awk -f eofsrc1b.awk || exit /b
+call :runtest         exit2                                   || exit /b
+call :runtest_ok      exitval1                                || exit /b
+call :runtest         exitval2                                || exit /b
+call :runtest_fail    exitval3                                || exit /b
+call :runtest_fail    fcall_exit                              || exit /b
+call :runtest_fail_in fcall_exit2                             || exit /b
+call :runtest_in      fldchg                                  || exit /b
+call :runtest_in      fldchgnf                                || exit /b
+call :runtest_in      fldterm                                 || exit /b
+call :runtest_fail_in fnamedat                                || exit /b
+call :runtest_fail    fnarray                                 || exit /b
+call :runtest_fail    fnarray2                                || exit /b
+call :runtest_fail    fnaryscl                                || exit /b
+call :runtest_fail    fnasgnm                                 || exit /b
+call :runtest_fail    fnmisc                                  || exit /b
+call :runtest         fordel                                  || exit /b
+call :runtest         forref                                  || exit /b
+call :runtest         forsimp                                 || exit /b
+call :runtest_in      fsbs                                    || exit /b
+call :runtest_in      fscaret                                 || exit /b
+call :runtest_in      fsnul1                                  || exit /b
+call :runtest_in      fsrs                                    || exit /b
+call :runtest         fsspcoln  """FS=[ :]+""" fsspcoln.in    || exit /b
+call :runtest_in      fstabplus                               || exit /b
+call :runtest         funsemnl                                || exit /b
+call :runtest_fail    funsmnam                                || exit /b
+call :runtest_in      funstack                                || exit /b
+call :runtest_in      getline                                 || exit /b
+call :runtest         getline2 getline2.awk getline2.awk      || exit /b
+call :runtest         getline3                                || exit /b
+call :runtest_in      getline4                                || exit /b
+call :runtest         getline5                                || exit /b
+call :runtest_in      getlnbuf                                || exit /b
+call :runtest_        getlnbuf -f gtlnbufv.awk getlnbuf.in    || exit /b
+call :runtest_in      getnr2tb                                || exit /b
+call :runtest_in      getnr2tm                                || exit /b
+call :runtest_fail    gsubasgn                                || exit /b
+call :runtest         gsubtest                                || exit /b
+call :runtest         gsubtst2                                || exit /b
+call :runtest_in      gsubtst3 --re-interval                  || exit /b
+call :runtest         gsubtst4                                || exit /b
+call :runtest_in      gsubtst5                                || exit /b
+call :runtest         gsubtst6                                || exit /b
+call :runtest_in      gsubtst7                                || exit /b
+call :runtest_in      gsubtst8                                || exit /b
+call :runtest         hex                                     || exit /b
+call :runtest_in      hex2                                    || exit /b
+call :runtest         hsprint                                 || exit /b
+call :runtest_in      inpref                                  || exit /b
+call :runtest         inputred                                || exit /b
+call :runtest         intest                                  || exit /b
+call :runtest         intprec                                 || exit /b
+call :runtest         iobug1                                  || exit /b
+call :runtest         leaddig                                 || exit /b
+call :runtest_in      leadnl                                  || exit /b
+call :runtest_in      litoct  --traditional                   || exit /b
+call :runtest_in      longsub                                 || exit /b
 
+:: 117
 :: more tests to come...
-rem.
 
 exit /b
 
-:testsimple_in
-call :testsimple      %1 %2 %3 "<" %1.in
+:runtest_in
+call :runtest      %1 %2 %3 "<" %1.in
 exit /b
 
-:testsimple_fail_in
-call :testsimple_fail %1 %2 %3 "<" %1.in
+:runtest_fail_in
+call :runtest_fail %1 %2 %3 "<" %1.in
 exit /b
 
-:testsimple_ok_in
-call :testsimple_ok   %1 %2 %3 "<" %1.in
+:runtest_ok_in
+call :runtest_ok   %1 %2 %3 "<" %1.in
 exit /b
 
-:testsimple
-:: if called from testsimple_in
+:runtest
+:: if called from runtest_in
 :: %4 = "<"
 :: %5 = %1.in
-call :testsimple_      %1 -f %1.awk %2 %3 %4 %5
+call :runtest_      %1 -f %1.awk %2 %3 %4 %5
 exit /b
 
-:testsimple_fail
-:: if called from testsimple_fail_in
+:runtest_fail
+:: if called from runtest_fail_in
 :: %4 = "<"
 :: %5 = %1.in
-call :testsimple_fail_ %1 -f %1.awk %2 %3 %4 %5
+call :runtest_fail_ %1 -f %1.awk %2 %3 %4 %5
 exit /b
 
-:testsimple_ok
-:: if called from testsimple_ok_in
+:runtest_ok
+:: if called from runtest_ok_in
 :: %4 = "<"
 :: %5 = %1.in
-call :testsimple_ok_   %1 -f %1.awk %2 %3 %4 %5
+call :runtest_ok_   %1 -f %1.awk %2 %3 %4 %5
 exit /b
 
-:testsimple_
-:: if called from testsimple_in -> testsimple
+:runtest_
+:: if called from runtest_in -> runtest
 :: %2 = -f
 :: %3 = %1.awk
 :: %4 = %2
@@ -293,8 +322,8 @@ exit /b
 call :execq "..\gawk.exe %~2 %~3 %~4 %~5 %~6 %~7 > _%1 2>&1" && call :cmpdel %1
 exit /b
 
-:testsimple_fail_
-:: if called from testsimple_fail_in -> testsimple_fail
+:runtest_fail_
+:: if called from runtest_fail_in -> runtest_fail
 :: %2 = -f
 :: %3 = %1.awk
 :: %4 = %2
@@ -309,8 +338,8 @@ cmd /c "exit /b 0"
 call :execq "(echo.EXIT CODE: %err%) >> _%1" && call :cmpdel %1
 exit /b
 
-:testsimple_ok_
-:: if called from testsimple_ok_in -> testsimple_ok
+:runtest_ok_
+:: if called from runtest_ok_in -> runtest_ok
 :: %2 = -f
 :: %3 = %1.awk
 :: %4 = %2
@@ -323,8 +352,12 @@ call :execq "(echo.EXIT CODE: %ERRORLEVEL%) >> _%1" && call :cmpdel %1
 exit /b
 
 :cmpdel
-call :execq "fc _%1 %1.ok > NUL" || (fc _%1 %1.ok & exit /b 1)
-del /q _%1
+call :cmpdel_ %1.ok _%1
+exit /b
+
+:cmpdel_
+call :execq "fc %1 %2 > NUL" || (fc %1 %2 & exit /b 1)
+del /q %2
 exit /b
 
 :exec
