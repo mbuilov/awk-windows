@@ -279,9 +279,9 @@ call :runtest_in      membug1                                 || exit /b
 call :runtest         memleak                                 || exit /b
 
 call :execq "..\gawk.exe -f messages.awk >_out2 2>_out3" && ^
-call :cmpdel_ out1.ok _out1 && ^
-call :cmpdel_ out2.ok _out2 && ^
-call :cmpdel_ out3.ok _out3 || exit /b
+call :cmpdel out1 && ^
+call :cmpdel out2 && ^
+call :cmpdel out3 || exit /b
 
 call :runtest         minusstr                                || exit /b
 call :runtest_in      mmap8k                                  || exit /b
@@ -306,7 +306,7 @@ call :runtest_in      nonl --lint                             || exit /b
 call :runtest_fail    noparms                                 || exit /b
 
 call :execq "<NUL set /p=A B C D E | ..\gawk.exe ""{ print $NF }"" - nors.in > _nors" && ^
-call :cmpdel_ nors.ok _nors || exit /b
+call :cmpdel nors || exit /b
 
 call :runtest_fail    nulinsrc                                || exit /b
 call :runtest_in      nulrsend                                || exit /b
@@ -346,8 +346,34 @@ call :runtest         prmreuse                                || exit /b
 call :runtest         prt1eval                                || exit /b
 call :runtest         prtoeval                                || exit /b
 call :runtest         rand                                    || exit /b
+
 call :runtest randtest "-vRANDOM=" "-vNSAMPLES=1024" "-vMAX_ALLOWED_SIGMA=5" "-vNRUNS=50" || exit /b
-:: 184
+
+call :runtest_in      range1                                  || exit /b
+call :runtest         range2                                  || exit /b
+call :runtest_fail    readbuf                                 || exit /b
+call :runtest_in      rebrackloc                              || exit /b
+call :runtest         rebt8b1                                 || exit /b
+call :runtest_in      rebuild                                 || exit /b
+call :runtest         redfilnm "srcdir=." redfilnm.in         || exit /b
+call :runtest_in      regeq                                   || exit /b
+call :runtest_in      regexpbrack                             || exit /b
+call :runtest_in      regexpbrack2                            || exit /b
+call :runtest         regexprange                             || exit /b
+call :runtest         regrange                                || exit /b
+call :runtest_in      reindops                                || exit /b
+call :runtest_in      reparse                                 || exit /b
+call :runtest_in      resplit                                 || exit /b
+call :runtest_in      rri1                                    || exit /b
+call :runtest_in      rs                                      || exit /b
+call :runtest_in      rscompat --traditional                  || exit /b
+call :runtest_in      rsnul1nl                                || exit /b
+
+set "COMMAND=..\gawk.exe ""BEGIN { for ^(i = 1; i ^<= 128*64+1; i++^) print """"abcdefgh123456\n"""" }"" 2>&1"
+set "COMMAND=%COMMAND% | ..\gawk.exe ""BEGIN { RS = """"""""; ORS = """"\n\n"""" }; { print }"" 2>&1"
+set "COMMAND=%COMMAND% | ..\gawk.exe "" /^^[^^a]/; END{ print NR }"""
+call :execq "%COMMAND% >_rsnulbig" && call :cmpdel rsnulbig || exit /b
+:: 204
 
 :: more tests to come...
 
@@ -427,34 +453,54 @@ call :execq "(echo.EXIT CODE: %ERRORLEVEL%) >> _%1" && call :cmpdel %1
 exit /b
 
 :cmpdel
+:: compare %1.ok with _%1 -> if equal, delete _%1
 call :cmpdel_ %1.ok _%1
 exit /b
 
 :cmpdel_
+:: compare %1 with %2 -> if equal, delete %2
 call :execq "fc %1 %2 > NUL" || (fc %1 %2 & exit /b 1)
 del /q %2
 exit /b
 
 :exec
 :: simple command, without quotes, redirections, etc.
-echo %*
 set /A "CALL_STAT+=1"
+echo %*
 %*
 exit /b
 
 :execq
 :: complex command in double-quotes
 :: note: replace "" with " in arguments
+set /A "CALL_STAT+=1"
 set "COMMAND=%~1"
+:: escape symbols for ECHO
 set "COMMAND=%COMMAND:>=^>%"
 set "COMMAND=%COMMAND:<=^<%"
 set "COMMAND=%COMMAND:&=^&%"
 set "COMMAND=%COMMAND:|=^|%"
 set "COMMAND=%COMMAND:(=^(%"
 set "COMMAND=%COMMAND:)=^)%"
+:: symbols inside double-quotes do not need to be escaped
+set "COMMAND=%COMMAND:^^^<=<%"
+set "COMMAND=%COMMAND:^^^>=>%"
+set "COMMAND=%COMMAND:^^^&=&%"
+set "COMMAND=%COMMAND:^^^|=|%"
+set "COMMAND=%COMMAND:^^^(=(%"
+set "COMMAND=%COMMAND:^^^)=)%"
+set "COMMAND=%COMMAND:^^^^=^%"
 echo %COMMAND:""="%
-set /A "CALL_STAT+=1"
+:: now run the command
 set "COMMAND=%~1"
+:: unescape symbols inside double-quotes
+set "COMMAND=%COMMAND:^^<=<%"
+set "COMMAND=%COMMAND:^^>=>%"
+set "COMMAND=%COMMAND:^^&=&%"
+set "COMMAND=%COMMAND:^^|=|%"
+set "COMMAND=%COMMAND:^^(=(%"
+set "COMMAND=%COMMAND:^^)=)%"
+set "COMMAND=%COMMAND:^^^^=^%"
 %COMMAND:""="%
 exit /b
 
