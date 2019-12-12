@@ -140,7 +140,7 @@ endlocal & set /A "CALL_STAT+=%CALL_STAT1%" & exit /b %err%
 
 :tests_in
 
-set AWKPATH=.
+call :execq "set AWKPATH=."
 
 :: 262 basic tests
 
@@ -272,8 +272,62 @@ call :runtest         leaddig                                 || exit /b
 call :runtest_in      leadnl                                  || exit /b
 call :runtest_in      litoct  --traditional                   || exit /b
 call :runtest_in      longsub                                 || exit /b
+call :runtest_in      longwrds -v "SORT=sort"                 || exit /b
+call :runtest_in      manglprm                                || exit /b
+call :runtest         math                                    || exit /b
+call :runtest_in      membug1                                 || exit /b
+call :runtest         memleak                                 || exit /b
 
-:: 117
+call :execq "..\gawk.exe -f messages.awk >_out2 2>_out3" && ^
+call :cmpdel_ out1.ok _out1 && ^
+call :cmpdel_ out2.ok _out2 && ^
+call :cmpdel_ out3.ok _out3 || exit /b
+
+call :runtest         minusstr                                || exit /b
+call :runtest_in      mmap8k                                  || exit /b
+call :runtest         nasty                                   || exit /b
+call :runtest         nasty2                                  || exit /b
+call :runtest         negexp                                  || exit /b
+call :runtest         negrange                                || exit /b
+call :runtest_in      nested                                  || exit /b
+call :runtest_in      nfldstr                                 || exit /b
+call :runtest         nfloop                                  || exit /b
+call :runtest_fail    nfneg                                   || exit /b
+call :runtest_in      nfset                                   || exit /b
+call :runtest_in      nlfldsep                                || exit /b
+call :runtest_in      nlinstr                                 || exit /b
+call :runtest         nlstrina                                || exit /b
+call :runtest         noeffect --lint                         || exit /b
+call :runtest_fail_   nofile """{}""" no/such/file            || exit /b
+call :runtest         nofmtch --lint                          || exit /b
+call :runtest_in      noloop1                                 || exit /b
+call :runtest_in      noloop2                                 || exit /b
+call :runtest_in      nonl --lint                             || exit /b
+call :runtest_fail    noparms                                 || exit /b
+
+call :execq "<NUL set /p=A B C D E | ..\gawk.exe ""{ print $NF }"" - nors.in > _nors" && ^
+call :cmpdel_ nors.ok _nors || exit /b
+
+call :runtest_fail    nulinsrc                                || exit /b
+call :runtest_in      nulrsend                                || exit /b
+call :runtest_in      numindex                                || exit /b
+call :runtest         numrange                                || exit /b
+call :runtest         numstr1                                 || exit /b
+call :runtest_in      numsubstr                               || exit /b
+call :runtest         octsub                                  || exit /b
+call :runtest_in      ofmt                                    || exit /b
+call :runtest         ofmta                                   || exit /b
+call :runtest_in      ofmtbig                                 || exit /b
+call :runtest_in      ofmtfidl                                || exit /b
+call :runtest_in      ofmts                                   || exit /b
+call :runtest         ofmtstrnum                              || exit /b
+call :runtest_in      ofs1                                    || exit /b
+call :runtest_in      onlynl                                  || exit /b
+call :runtest         opasnidx                                || exit /b
+call :runtest         opasnslf                                || exit /b
+
+:: 162
+
 :: more tests to come...
 
 exit /b
