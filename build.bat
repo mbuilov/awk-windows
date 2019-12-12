@@ -18,8 +18,8 @@ set "EXTCC=cl %CMNOPTS% /DHAVE_CONFIG_H /Iextension /Ipc /I."
 
 set CALL_STAT=0
 
-::call :gawk  || goto :build_err
-::call :exts  || goto :build_err
+call :gawk  || goto :build_err
+call :exts  || goto :build_err
 call :tests || goto :test_err
 
 echo CALL_STAT=%CALL_STAT%
@@ -325,8 +325,29 @@ call :runtest_in      ofs1                                    || exit /b
 call :runtest_in      onlynl                                  || exit /b
 call :runtest         opasnidx                                || exit /b
 call :runtest         opasnslf                                || exit /b
-
-:: 162
+call :runtest_fail    paramasfunc1 --posix                    || exit /b
+call :runtest_fail    paramasfunc2 --posix                    || exit /b
+call :runtest_fail    paramdup                                || exit /b
+call :runtest_fail    paramres                                || exit /b
+call :runtest         paramtyp                                || exit /b
+call :runtest         paramuninitglobal                       || exit /b
+call :runtest_in      parse1                                  || exit /b
+call :runtest_in      parsefld                                || exit /b
+call :runtest_fail    parseme                                 || exit /b
+call :runtest         pcntplus                                || exit /b
+call :runtest         posix2008sub --posix                    || exit /b
+call :runtest_in      prdupval                                || exit /b
+call :runtest         prec                                    || exit /b
+call :runtest         printf0 --posix                         || exit /b
+call :runtest         printf1                                 || exit /b
+call :runtest         printfchar                              || exit /b
+call :runtest_fail    prmarscl                                || exit /b
+call :runtest         prmreuse                                || exit /b
+call :runtest         prt1eval                                || exit /b
+call :runtest         prtoeval                                || exit /b
+call :runtest         rand                                    || exit /b
+call :runtest randtest "-vRANDOM=" "-vNSAMPLES=1024" "-vMAX_ALLOWED_SIGMA=5" "-vNRUNS=50" || exit /b
+:: 184
 
 :: more tests to come...
 
