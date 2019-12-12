@@ -373,7 +373,34 @@ set "COMMAND=..\gawk.exe ""BEGIN { for ^(i = 1; i ^<= 128*64+1; i++^) print """"
 set "COMMAND=%COMMAND% | ..\gawk.exe ""BEGIN { RS = """"""""; ORS = """"\n\n"""" }; { print }"" 2>&1"
 set "COMMAND=%COMMAND% | ..\gawk.exe "" /^^[^^a]/; END{ print NR }"""
 call :execq "%COMMAND% >_rsnulbig" && call :cmpdel rsnulbig || exit /b
-:: 204
+
+set "COMMAND=..\gawk.exe ""BEGIN { ORS = """"""""; n = """"\n""""; for ^(i = 1; i ^<= 10; i++^) n = ^(n n^); "
+set "COMMAND=%COMMAND%for ^(i = 1; i ^<= 128; i++^) print n; print """"abc\n"""" }"" 2>&1"
+set "COMMAND=%COMMAND% | ..\gawk.exe ""BEGIN { RS = """"""""; ORS = """"\n\n"""" };{ print }"" 2>&1"
+set "COMMAND=%COMMAND% | ..\gawk.exe "" /^^[^^a]/; END { print NR }"""
+call :execq "%COMMAND% >_rsnulbig2" && call :cmpdel rsnulbig2 || exit /b
+
+call :runtest         rstest1                                 || exit /b
+call :runtest         rstest2                                 || exit /b
+call :runtest         rstest3                                 || exit /b
+call :runtest         rstest4                                 || exit /b
+call :runtest         rstest5                                 || exit /b
+call :runtest_in      rswhite                                 || exit /b
+call :runtest_fail    scalar                                  || exit /b
+call :runtest_fail    sclforin                                || exit /b
+call :runtest_fail    sclifin                                 || exit /b
+call :runtest_in      setrec0                                 || exit /b
+call :runtest         setrec1                                 || exit /b
+call :runtest         sigpipe1                                || exit /b
+call :runtest         sortempty                               || exit /b
+call :runtest_in      sortglos                                || exit /b
+call :runtest         spacere                                 || exit /b
+call :runtest_in      splitargv                               || exit /b
+call :runtest         splitarr                                || exit /b
+call :runtest         splitdef                                || exit /b
+call :runtest_in      splitvar                                || exit /b
+call :runtest         splitwht                                || exit /b
+:: 225
 
 :: more tests to come...
 

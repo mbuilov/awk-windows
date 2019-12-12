@@ -3246,3 +3246,53 @@
 +    }
 +
 +function abs(abs_input) { return(sqrt(abs_input^2)) ; }
+--- orig/gawk-5.0.1/test/rstest3.awk	2017-12-14 20:49:00.000000000 +0300
++++ gawk-5.0.1/test/rstest3.awk	2019-12-12 16:46:47.679991300 +0300
+@@ -69,5 +69,6 @@
+ # 
+ BEGIN {
+ 	RS = ""
+-	"echo x | tr -d '\\12'" | getline
++#	"echo x | tr -d '\\12'" | getline
++	"<NUL set /p\"=x\"" | getline
+ }
+--- orig/gawk-5.0.1/test/rstest4.awk	2017-12-14 20:49:00.000000000 +0300
++++ gawk-5.0.1/test/rstest4.awk	2019-12-12 16:48:22.857435200 +0300
+@@ -61,7 +61,8 @@
+     while (("echo" | getline) == 1)
+ 	;
+     RS = ""
+-    "echo \"a\n\nb\"" | getline y
++#    "echo \"a\n\nb\"" | getline y
++    "echo a\n\nb" | getline y
+     printf "y = <%s>\n", y	# ADR
+     printf "x = <%s>\n", x	# ADR
+ }
+--- orig/gawk-5.0.1/test/rstest5.awk	2017-12-14 20:49:00.000000000 +0300
++++ gawk-5.0.1/test/rstest5.awk	2019-12-12 17:12:50.223363700 +0300
+@@ -53,8 +53,11 @@
+ # 
+ BEGIN {
+     RS = ""
+-    "echo 'foo\n\nbaz'" | getline ; print
+-    "echo 'foo\n\nbaz'" | getline ; print
+-    "echo 'bar\n\nbaz'" | getline ; print
++#    "echo 'foo\n\nbaz'" | getline ; print
++#    "echo 'foo\n\nbaz'" | getline ; print
++#    "echo 'bar\n\nbaz'" | getline ; print
++    "echo.foo&echo.&echo.baz" | getline ; print
++    "echo.foo&echo.&echo.baz" | getline ; print
++    "echo.bar&echo.&echo.baz" | getline ; print
+     printf "x = <%s>\n", x
+ }
+--- orig/gawk-5.0.1/test/sigpipe1.awk	2018-12-23 23:01:42.000000000 +0300
++++ gawk-5.0.1/test/sigpipe1.awk	2019-12-12 18:04:10.974572600 +0300
+@@ -1,6 +1,7 @@
+ BEGIN {
+ 	print "system"
+-	command = "yes | true"
++#	command = "yes | true"
++	command = "(for /L %L in (0,0,1) do @dir) | rem"
+ 	system(command)
+ 
+ 	print "pipe to command"
