@@ -3147,3 +3147,30 @@
 +BEGIN { print "foo" | "set /p x= & cmd /c \"(echo.%x%)\" & exit 12" }
  # this should still exit 0, as pointed out by kenny mccormack in
  # comp.lang.awk on 2 feb 2005
+--- orig/gawk-5.0.1/test/getline5.awk	2017-12-14 20:53:45.000000000 +0300
++++ gawk-5.0.1/test/getline5.awk	2019-12-12 12:46:36.444824500 +0300
+@@ -31,5 +31,6 @@
+     system("echo 1 > f")
+     while ((getline a[++c] < "f") > 0) {}
+     print c
+-    system("rm -f f")
++#    system("rm -f f")
++    system("del /q f")
+ }
+--- orig/gawk-5.0.1/test/iobug1.awk	2017-12-14 20:49:00.000000000 +0300
++++ gawk-5.0.1/test/iobug1.awk	2019-12-12 12:47:49.855023400 +0300
+@@ -46,8 +46,11 @@
+ #!/usr/bin/gawk -f
+ 
+ BEGIN {
+-	printf "" | "cat"             # [a]
+-	getline line < "/dev/null"    # [b]
+-	"true" | getline line         # [c]
++#	printf "" | "cat"             # [a]
++	printf "" | "find \"\""       # [a]
++#	getline line < "/dev/null"    # [b]
++	getline line < "NUL"          # [b]
++#	"true" | getline line         # [c]
++	"rem." | getline line         # [c]
+ }
+ # ================================================================================
