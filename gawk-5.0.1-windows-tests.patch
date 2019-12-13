@@ -161,3 +161,24 @@
  	system(command)
  
  	print "pipe to command"
+--- orig/gawk-5.0.1/test/status-close.awk	2019-04-05 10:29:20.000000000 +0300
++++ gawk-5.0.1/test/status-close.awk	2019-12-13 11:44:48.589554000 +0300
+@@ -1,12 +1,15 @@
+ BEGIN {
+-    cat  = "cat ; exit 3"
+-    print system("echo xxx | (cat ; exit 4)")
++#    cat  = "cat ; exit 3"
++    cat  = "find /v \"\" & exit 3"
++#    print system("echo xxx | (cat ; exit 4)")
++    print system("echo xxx| (find /v \"\" & exit 4)")
+ 
+     print "YYY" | cat
+ 
+     print close(cat)
+ 
+-    echo = "echo boo ; exit 5"
++#    echo = "echo boo ; exit 5"
++    echo = "echo boo& exit 5"
+     echo | getline boo
+     print "got", boo
+ 

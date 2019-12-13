@@ -115,6 +115,9 @@ call :ext readfile       || exit /b
 call :ext ordchr         || exit /b
 call :ext intdiv         || exit /b
 call :ext inplace        || exit /b
+
+:: not ported yet...
+
 ::call :ext gawkfts      || exit /b
 ::call :ext filefuncs    || exit /b
 ::call :ext fork         || exit /b
@@ -400,9 +403,45 @@ call :runtest         splitarr                                || exit /b
 call :runtest         splitdef                                || exit /b
 call :runtest_in      splitvar                                || exit /b
 call :runtest         splitwht                                || exit /b
-:: 225
+call :runtest         status-close                            || exit /b
+call :runtest         strcat1                                 || exit /b
+call :runtest         strnum1                                 || exit /b
+call :runtest         strnum2                                 || exit /b
+call :runtest_in      strtod                                  || exit /b
+call :runtest_in      subamp                                  || exit /b
+call :runtest_in      subback                                 || exit /b
+call :runtest         subi18n                                 || exit /b
+call :runtest         subsepnm                                || exit /b
+call :runtest         subslash                                || exit /b
+call :runtest         substr                                  || exit /b
+call :runtest_in      swaplns                                 || exit /b
+call :runtest_fail    synerr1                                 || exit /b
+call :runtest_fail    synerr2                                 || exit /b
+call :runtest_fail    synerr3                                 || exit /b
+call :runtest         tailrecurse                             || exit /b
+call :runtest_in      tradanch --traditional                  || exit /b
+call :runtest_fail_in trailbs                                 || exit /b
 
-:: more tests to come...
+call :runtest tweakfld tweakfld.in && call :exec del /q errors.cleanup || exit /b
+
+call :runtest         uninit2 --lint                          || exit /b
+call :runtest         uninit3 --lint                          || exit /b
+call :runtest         uninit4 --lint                          || exit /b
+call :runtest         uninit5 --lint                          || exit /b
+call :runtest         uninitialized --lint                    || exit /b
+call :runtest_fail    unterm                                  || exit /b
+call :runtest_in      uparrfs                                 || exit /b
+call :runtest         uplus                                   || exit /b
+call :runtest_in      wideidx                                 || exit /b
+call :runtest         wideidx2                                || exit /b
+call :runtest         widesub                                 || exit /b
+call :runtest         widesub2                                || exit /b
+call :runtest_in      widesub3                                || exit /b
+call :runtest         widesub4                                || exit /b
+call :runtest_in      wjposer1                                || exit /b
+call :runtest         zero2                                   || exit /b
+call :runtest         zeroe0                                  || exit /b
+call :runtest         zeroflag                                || exit /b
 
 exit /b
 
