@@ -499,6 +499,21 @@ call :runtest_fail    clos1way4                               || exit /b
 call :runtest_fail    clos1way5                               || exit /b
 call :runtest         clos1way6                               || exit /b
 call :runtest         crlf                                    || exit /b
+call :runtest_fail_   dbugeval --debug -f NUL "< dbugeval.in" || exit /b
+call :runtest_fail_in dbugeval2 --debug                       || exit /b
+call :runtest_fail_in dbugeval3 --debug                       || exit /b
+call :runtest_fail_in dbugtypedre1 --debug                    || exit /b
+call :runtest_fail_in dbugtypedre2 --debug                    || exit /b
+call :runtest delsub                                          || exit /b
+
+:: Windows does not have a subsystem analogous to /dev/fd
+:: these tests are not supported: devfd devfd1 devfd2
+
+call :runtest_in      dfacheck1                               || exit /b
+
+call :execq "..\gawk.exe --dump-variables 1 < dumpvars.in > NUL" && ^
+call :execq "find /v ""ENVIRON"" < awkvars.out | find /v ""PROCINFO"" > _dumpvars" && ^
+call :cmpdel dumpvars || exit /b
 
 :: more tests to come...
 
