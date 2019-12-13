@@ -1,3 +1,16 @@
+--- orig/gawk-5.0.1/test/beginfile1.ok	2017-12-14 20:53:45.000000000 +0300
++++ gawk-5.0.1/test/beginfile1.ok	2019-12-13 14:00:06.806889500 +0300
+@@ -8,7 +8,7 @@
+ In BEGINFILE:
+ 	FILENAME = file, FNR = 0, ERRNO = "No such file or directory"
+ In BEGINFILE:
+-	FILENAME = Makefile, FNR = 0, ERRNO = ""
+-processing Makefile
++	FILENAME = Xfile, FNR = 0, ERRNO = ""
++processing Xfile
+ In ENDFILE:
+-	FILENAME = Makefile, FNR = 2, ERRNO = ""
++	FILENAME = Xfile, FNR = 2, ERRNO = ""
 --- orig/gawk-5.0.1/test/childin.awk	2017-12-14 20:49:00.000000000 +0300
 +++ gawk-5.0.1/test/childin.awk	2019-12-11 16:00:12.959996200 +0300
 @@ -1 +1,2 @@

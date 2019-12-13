@@ -1551,7 +1551,7 @@
 -#endif /* not __DJGPP__, not __MINGW32__ */
 +#endif /* not __EMX__, not __DJGPP__, not __MINGW32__, not _MSC_VER */
 --- orig/gawk-5.0.1/io.c	2019-05-22 21:00:52.000000000 +0300
-+++ gawk-5.0.1/io.c	2019-12-11 12:34:52.613446500 +0300
++++ gawk-5.0.1/io.c	2019-12-13 13:52:38.895270400 +0300
 @@ -113,7 +113,7 @@
  #include "popen.h"
  #endif
@@ -1614,7 +1614,29 @@
  			return;		/* read next file */
  		}
  		fatal(_("cannot open file `%s' for reading (%s)"),
-@@ -672,7 +682,7 @@
+@@ -667,12 +677,29 @@
+ 		    || iop->public.fd == fileno(stdout)
+ 		    || iop->public.fd == fileno(stderr))
+ 			ret = remap_std_file(iop->public.fd);
++#if defined(__EMX__) || defined(__MINGW32__) || defined(_MSC_VER)
++		/* On OS/2 and Windows directory access via open() is
++		   not permitted.  So don't close().  */
++		else if (S_ISDIR(iop->public.sbuf.st_mode))
++			ret = 0;
++#endif
++		else if (S_ISREG(iop->public.sbuf.st_mode)
++#ifdef S_ISBLK
++		    || S_ISBLK(iop->public.sbuf.st_mode)
++#endif
++#ifdef S_ISLNK
++		    || S_ISLNK(iop->public.sbuf.st_mode)
++#endif
++		    || S_ISDIR(iop->public.sbuf.st_mode)
++		    || S_ISCHR(iop->public.sbuf.st_mode)
++		    || S_ISFIFO(iop->public.sbuf.st_mode))
++			ret = close(iop->public.fd);
+ 		else
+ 			ret = closemaybesocket(iop->public.fd);
  	}
  
  	if (ret == -1)
@@ -1623,7 +1645,7 @@
  				iop->public.name, strerror(errno));
  	/*
  	 * Be careful -- $0 may still reference the buffer even though
-@@ -820,7 +830,7 @@
+@@ -820,7 +847,7 @@
  		 */
  		if ((rp->flag & RED_EOF) != 0 && redirtype == redirect_pipein) {
  			if (rp->pid != -1)
@@ -1632,7 +1654,7 @@
  				/* MinGW cannot wait for any process.  */
  				wait_any(rp->pid);
  #else
-@@ -832,9 +842,9 @@
+@@ -832,9 +859,9 @@
  		/* now check for a match */
  		if (strlen(rp->value) == explen
  		    && memcmp(rp->value, str, explen) == 0
@@ -1644,7 +1666,7 @@
  
  			int rpflag = (rp->flag & ~(RED_NOBUF|RED_EOF|RED_PTY));
  			int newflag = (tflag & ~(RED_NOBUF|RED_EOF|RED_PTY));
-@@ -893,7 +903,7 @@
+@@ -893,7 +920,7 @@
  			break;
  		case redirect_pipe:
  			if (extfd >= 0) {
@@ -1653,7 +1675,7 @@
  				return NULL;
  			}
  			/* synchronize output before new pipe */
-@@ -918,7 +928,7 @@
+@@ -918,7 +945,7 @@
  			break;
  		case redirect_pipein:
  			if (extfd >= 0) {
@@ -1662,7 +1684,7 @@
  				return NULL;
  			}
  			direction = "from";
-@@ -947,7 +957,7 @@
+@@ -947,7 +974,7 @@
  		case redirect_twoway:
  #ifndef HAVE_SOCKETS
  			if (extfd >= 0) {
@@ -1671,7 +1693,7 @@
  				return NULL;
  			}
  #endif
-@@ -1166,7 +1176,7 @@
+@@ -1166,7 +1193,7 @@
  			rp->flag |= RED_USED;
  			errno = 0;
  			if (rp->output.gawk_fclose(rp->output.fp, rp->output.opaque) != 0)
@@ -1680,7 +1702,7 @@
  					rp->value, strerror(errno));
  			rp->output.fp = NULL;
  			break;
-@@ -1362,16 +1372,16 @@
+@@ -1362,16 +1389,16 @@
  		 * for the types makes message translation easier.
  		 */
  		if ((rp->flag & RED_SOCKET) != 0)
@@ -1701,7 +1723,7 @@
  				rp->value);
  	}
  
-@@ -1400,7 +1410,7 @@
+@@ -1400,7 +1427,7 @@
  		bool is_fatal = ! is_non_fatal_std(fp);
  
  		if (is_fatal) {
@@ -1710,7 +1732,7 @@
  			if (errno == 0 || errno == EINVAL)
  				w32_maybe_set_errno();
  #endif
-@@ -1413,7 +1423,7 @@
+@@ -1413,7 +1440,7 @@
  						strerror(errno));
  		} else {
  			update_ERRNO_int(errno);
@@ -1719,7 +1741,7 @@
  				? _("error writing standard output (%s)")
  				: _("error writing standard error (%s)"),
  					strerror(errno));
-@@ -1500,12 +1510,12 @@
+@@ -1500,12 +1527,12 @@
  	*stdio_problem = false;
  	/* we don't warn about stdout/stderr if EPIPE, but we do error exit */
  	if (fflush(stdout) != 0) {
@@ -1734,7 +1756,7 @@
  		else
  			*got_EPIPE = true;
  
-@@ -1513,12 +1523,12 @@
+@@ -1513,12 +1540,12 @@
  		*stdio_problem = true;
  	}
  	if (fflush(stderr) != 0) {
@@ -1749,7 +1771,7 @@
  		else
  			*got_EPIPE = true;
  
-@@ -1607,10 +1617,10 @@
+@@ -1607,10 +1634,10 @@
  	if (lerror) {
  		if (strcmp(localpname, "0") != 0) {
  #ifdef HAVE_GAI_STRERROR
@@ -1762,7 +1784,7 @@
  #endif
  			*hard_error = true;
  			return INVALID_HANDLE;
-@@ -1633,10 +1643,10 @@
+@@ -1633,10 +1660,10 @@
  			if (lres0 != NULL)
  				freeaddrinfo(lres0);
  #ifdef HAVE_GAI_STRERROR
@@ -1775,7 +1797,7 @@
  #endif
  			*hard_error = true;
  			return INVALID_HANDLE;
-@@ -1665,11 +1675,11 @@
+@@ -1665,11 +1692,11 @@
  					(char *) & linger, sizeof(linger));
  #endif
  			}
@@ -1789,7 +1811,7 @@
  					break;
  			} else { /* remote host is ANY => create a server */
  				if (type == SOCK_STREAM) {
-@@ -1833,14 +1843,14 @@
+@@ -1833,14 +1860,14 @@
  		cp[isi.remoteport.offset+isi.remoteport.len] = '\0';
  
  		if (first_time) {
@@ -1808,7 +1830,7 @@
  					def_retries = count;
  			}
  
-@@ -1893,7 +1903,7 @@
+@@ -1893,7 +1920,7 @@
  		if (openfd == INVALID_HANDLE && errno == ENOENT && save_errno)
  			errno = save_errno;
  	}
@@ -1817,7 +1839,7 @@
  	if (openfd == INVALID_HANDLE && errno == EACCES) {
  		/* On OS/2 and Windows directory access via open() is
  		   not permitted.  */
-@@ -2300,18 +2310,18 @@
+@@ -2300,18 +2327,18 @@
  		first_pty_letter = '\0';	/* reset for next command */
  		return true;
  	}
@@ -1839,7 +1861,7 @@
  	char *qcmd = NULL;
  #endif
  #endif
-@@ -2327,7 +2337,7 @@
+@@ -2327,7 +2354,7 @@
  		return false;
  	}
  
@@ -1848,7 +1870,7 @@
  	save_stdin = dup(0);	/* duplicate stdin */
  	save_stdout = dup(1);	/* duplicate stdout */
  
-@@ -2372,7 +2382,7 @@
+@@ -2372,7 +2399,7 @@
  	/* stderr does NOT get dup'ed onto child's stdout */
  #ifdef __EMX__
  	pid = spawnl(P_NOWAIT, "/bin/sh", "sh", "-c", str, NULL);
@@ -1857,7 +1879,7 @@
  	pid = spawnl(P_NOWAIT, getenv("ComSpec"), "cmd.exe", "/c",
  		     qcmd = quote_cmd(str), NULL);
  	efree(qcmd);
-@@ -2404,7 +2414,7 @@
+@@ -2404,7 +2431,7 @@
  		return false;
  	}
  
@@ -1866,7 +1888,7 @@
  	if ((pid = fork()) < 0) {
  		save_errno = errno;
  		close(ptoc[0]); close(ptoc[1]);
-@@ -2432,7 +2442,7 @@
+@@ -2432,7 +2459,7 @@
  		execl("/bin/sh", "sh", "-c", str, NULL);
  		_exit(errno == ENOENT ? 127 : 126);
  	}
@@ -1875,7 +1897,7 @@
  
  	/* parent */
  	if ((BINMODE & BINMODE_INPUT) != 0)
-@@ -2472,7 +2482,7 @@
+@@ -2472,7 +2499,7 @@
  	else
  		find_output_wrapper(& rp->output);
  
@@ -1884,7 +1906,7 @@
  	os_close_on_exec(ctop[0], str, "pipe", "from");
  	os_close_on_exec(ptoc[1], str, "pipe", "from");
  
-@@ -2531,7 +2541,7 @@
+@@ -2531,7 +2558,7 @@
  
  	istat = signal(SIGINT, SIG_IGN);
  #endif
@@ -1893,7 +1915,7 @@
  	if (interesting < 0) {
  		status = -1;
  		pid = -1;
-@@ -2546,7 +2556,8 @@
+@@ -2546,7 +2573,8 @@
  				break;
  			}
  	}
@@ -1903,7 +1925,7 @@
  #ifndef HAVE_SIGPROCMASK
  	hstat = signal(SIGHUP, SIG_IGN);
  	qstat = signal(SIGQUIT, SIG_IGN);
-@@ -2583,7 +2594,7 @@
+@@ -2583,7 +2611,7 @@
  	signal(SIGHUP, hstat);
  	signal(SIGQUIT, qstat);
  #endif
@@ -1912,7 +1934,7 @@
  #ifndef HAVE_SIGPROCMASK
  	signal(SIGINT, istat);
  #else
-@@ -2599,9 +2610,9 @@
+@@ -2599,9 +2627,9 @@
  {
  	int p[2];
  	int pid;
@@ -1924,7 +1946,7 @@
  	char *qcmd = NULL;
  #endif
  #endif
-@@ -2617,7 +2628,7 @@
+@@ -2617,7 +2645,7 @@
  	if (pipe(p) < 0)
  		fatal(_("cannot open pipe `%s' (%s)"), cmd, strerror(errno));
  
@@ -1933,7 +1955,7 @@
  	rp->iop = NULL;
  	save_stdout = dup(1); /* save stdout */
  	if (save_stdout == -1) {
-@@ -2642,7 +2653,7 @@
+@@ -2642,7 +2670,7 @@
  
  #ifdef __EMX__
  	pid = spawnl(P_NOWAIT, "/bin/sh", "sh", "-c", cmd, NULL);
@@ -1942,7 +1964,7 @@
  	pid = spawnl(P_NOWAIT, getenv("ComSpec"), "cmd.exe", "/c",
  		     qcmd = quote_cmd(cmd), NULL);
  	efree(qcmd);
-@@ -2656,7 +2667,7 @@
+@@ -2656,7 +2684,7 @@
  	}
  	close(save_stdout);
  
@@ -1951,7 +1973,7 @@
  	if ((pid = fork()) == 0) {
  		if (close(1) == -1)
  			fatal(_("close of stdout in child failed (%s)"),
-@@ -2669,14 +2680,14 @@
+@@ -2669,14 +2697,14 @@
  		execl("/bin/sh", "sh", "-c", cmd, NULL);
  		_exit(errno == ENOENT ? 127 : 126);
  	}
@@ -1968,7 +1990,7 @@
  	if (close(p[1]) == -1) {
  		close(p[0]);
  		fatal(_("close of pipe failed (%s)"), strerror(errno));
-@@ -2958,7 +2969,7 @@
+@@ -2958,7 +2986,7 @@
  			for (end = start; *end && *end != envsep; end++)
  				continue;
  
@@ -1977,7 +1999,7 @@
  			if (len > 0) {
  				emalloc(p, char *, len + 2, "init_awkpath");
  				memcpy(p, start, len);
-@@ -3170,7 +3181,7 @@
+@@ -3170,7 +3198,7 @@
  
  	if (ip != NULL) {
  		if (! ip->take_control_of(& iop->public))
@@ -1986,7 +2008,7 @@
  					ip->name, iop->public.name);
  		else
  			iop->valid = true;
-@@ -3225,7 +3236,7 @@
+@@ -3225,7 +3253,7 @@
  
  	if (op != NULL) {
  		if (! op->take_control_of(outbuf)) {
@@ -1995,7 +2017,7 @@
  					op->name, outbuf->name);
  			return false;
  		}
-@@ -3284,7 +3295,7 @@
+@@ -3284,7 +3312,7 @@
  		if (rp->iop == NULL)
  			rp->iop = iop_alloc(INVALID_HANDLE, name, 0);
  		if (! tw->take_control_of(name, & rp->iop->public, & rp->output)) {
@@ -2004,7 +2026,7 @@
  					tw->name, name);
  			return false;
  		}
-@@ -3353,7 +3364,7 @@
+@@ -3353,7 +3381,7 @@
  
  	if (fd != INVALID_HANDLE)
  		fstat(fd, & iop->public.sbuf);
@@ -2013,7 +2035,7 @@
  	else if (errno_val == EISDIR) {
  		iop->public.sbuf.st_mode = (_S_IFDIR | _S_IRWXU);
  		iop->public.fd = FAKE_FD_VALUE;
-@@ -3541,7 +3552,7 @@
+@@ -3541,7 +3569,7 @@
  	 */
  	/* Thus, the check for \n here; big speedup ! */
  	if (rs != '\n' && gawk_mb_cur_max > 1) {
@@ -2022,7 +2044,7 @@
  		bool found = false;
  
  		memset(& mbs, 0, sizeof(mbstate_t));
-@@ -3559,7 +3570,7 @@
+@@ -3559,7 +3587,7 @@
  				/* We treat it as a single-byte character.  */
  				mbclen = 1;
  			}
@@ -2031,7 +2053,7 @@
  			bp += mbclen;
  		} while (len > 0 && ! found);
  
-@@ -3701,7 +3712,7 @@
+@@ -3701,7 +3729,7 @@
  	if (RSre->maybe_long) {
  		char *matchend = iop->off + reend;
  
@@ -2040,7 +2062,7 @@
  			return TERMNEAREND;
  	}
  
-@@ -4017,7 +4028,7 @@
+@@ -4017,7 +4045,7 @@
  	} else {
  		assert(recm.start != NULL);
  		*out = recm.start;
@@ -2049,7 +2071,7 @@
  	}
  
  	iop->off += recm.len + recm.rt_len;
-@@ -4107,6 +4118,7 @@
+@@ -4107,6 +4135,7 @@
  	if (val)
  		return boolval(val);
  #endif /* HAVE_TERMIOS_H */
@@ -2057,7 +2079,7 @@
  	return false;
  }
  
-@@ -4187,7 +4199,7 @@
+@@ -4187,7 +4216,7 @@
  	cp += 4;
  
  	/* which localport? */
@@ -2066,7 +2088,7 @@
  	while (*cp != '/') {
  		if (++cp >= cpend)
  			return false;
-@@ -4196,19 +4208,19 @@
+@@ -4196,19 +4225,19 @@
  	 * Require a port, let them explicitly put 0 if
  	 * they don't care.
  	 */
@@ -2089,7 +2111,7 @@
  		return false;
  
  	/* which remoteport? */
-@@ -4221,10 +4233,10 @@
+@@ -4221,10 +4250,10 @@
  	 * Here too, require a port, let them explicitly put 0 if
  	 * they don't care.
  	 */
@@ -2102,7 +2124,7 @@
  		return false;
  
  #ifndef HAVE_GETADDRINFO
-@@ -4342,7 +4354,7 @@
+@@ -4342,7 +4371,7 @@
  #if ! defined(VMS)
  	fd_set readfds;
  	struct timeval tv;
@@ -2111,7 +2133,7 @@
  	/*
  	 * Only sockets can be read with a timeout.  Also, the FD_*
  	 * macros work on SOCKET type, not on int file descriptors.
-@@ -4350,7 +4362,7 @@
+@@ -4350,7 +4379,7 @@
  	SOCKET s = valid_socket(fd);
  
  	if (!s)
@@ -2120,7 +2142,7 @@
  #else
  	int s = fd;
  #endif
-@@ -4371,7 +4383,7 @@
+@@ -4371,7 +4400,7 @@
  		return -1;
  
  	if (FD_ISSET(s, & readfds))
@@ -2129,7 +2151,7 @@
  	/* else
  		timed out */
  
-@@ -4427,13 +4439,13 @@
+@@ -4427,13 +4456,13 @@
  gawk_fclose(FILE *fp, void *opaque)
  {
  	int result;
@@ -2376,7 +2398,7 @@
  
  			/*
 --- orig/gawk-5.0.1/nonposix.h	2019-04-05 10:38:15.000000000 +0300
-+++ gawk-5.0.1/nonposix.h	2019-12-11 12:34:52.621447000 +0300
++++ gawk-5.0.1/nonposix.h	2019-12-13 13:38:36.176069600 +0300
 @@ -30,7 +30,7 @@
  
  #define FAKE_FD_VALUE 42
@@ -2386,7 +2408,7 @@
  /* Replacements for sys/wait.h macros.  */
  # define WEXITSTATUS(stv) (((unsigned)(stv)) & ~0xC0000000)
  /* MS-Windows programs that crash due to a fatal exception exit with
-@@ -65,13 +65,19 @@
+@@ -65,13 +65,25 @@
  #endif
  #define setlocale(c,v) w32_setlocale(c,v)
  
@@ -2396,7 +2418,13 @@
 -#if defined(VMS) || defined(__DJGPP__) || defined(__MINGW32__)
 +#ifdef _MSC_VER
 +#ifndef S_ISDIR
-+#define S_ISDIR(m) (((m)&S_IFMT) == S_IFDIR)
++#define S_ISDIR(m) (((m)&_S_IFMT) == _S_IFDIR)
++#endif
++#ifndef S_ISCHR
++#define S_ISCHR(m) (((m)&_S_IFMT) == _S_IFCHR)
++#endif
++#ifndef S_ISFIFO
++#define S_ISFIFO(m) (((m)&_S_IFMT) == _S_IFIFO)
 +#endif
 +#endif
 +

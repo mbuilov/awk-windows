@@ -2,16 +2,19 @@
 
 set "NODEPRECATE=/D_CRT_NONSTDC_NO_DEPRECATE /D_CRT_SECURE_NO_DEPRECATE /D_WINSOCK_DEPRECATED_NO_WARNINGS"
 
+if 1==1 (
+:: release options
 set "CMNOPTS=/nologo /c /W4 %NODEPRECATE% /Ox /GF /Gy /GS- /GL /EHsc /we4013"
 set "GAWKLIB=lib /nologo /LTCG"
 set "GAWKLINK=link /nologo /LTCG /DEFAULTLIB:LIBCPMT.lib"
 set "EXTLINK=link /nologo /LTCG /DEFAULTLIB:LIBCPMT.lib /DLL /SUBSYSTEM:CONSOLE"
-
+) else (
 :: debugging options
-::set "CMNOPTS=/nologo /c /W4 %NODEPRECATE% /Od /Zi /EHsc /we4013 /D_DEBUG"
-::set "GAWKLIB=lib /nologo"
-::set "GAWKLINK=link /nologo /DEBUG /DEFAULTLIB:LIBCPMTD.lib"
-::set "EXTLINK=link /nologo /DEBUG /DEFAULTLIB:LIBCPMTD.lib /DLL /SUBSYSTEM:CONSOLE"
+set "CMNOPTS=/nologo /c /W4 %NODEPRECATE% /Od /Zi /EHsc /we4013 /D_DEBUG"
+set "GAWKLIB=lib /nologo"
+set "GAWKLINK=link /nologo /DEBUG /DEFAULTLIB:LIBCPMTD.lib"
+set "EXTLINK=link /nologo /DEBUG /DEFAULTLIB:LIBCPMTD.lib /DLL /SUBSYSTEM:CONSOLE"
+)
 
 set "GAWKCC=cl %CMNOPTS% /DGAWK /DHAVE___INLINE /DHAVE_CONFIG_H /DLOCALEDIR=\"\" /DDEFPATH=\"\" /DDEFLIBPATH=\"\" /DSHLIBEXT=\"dll\" /Isupport /Ipc /I."
 set "EXTCC=cl %CMNOPTS% /DHAVE_CONFIG_H /Iextension /Ipc /I."
@@ -131,20 +134,26 @@ call :exec %EXTLINK% /OUT:%1.dll extension\testext.obj || exit /b
 exit /b
 
 :tests
-
 setlocal
 set CALL_STAT=0
 call :exec cd test
-call :tests_in
+set err=%ERRORLEVEL%
+if not %err% equ 0 goto :test_no_cd
+call :tests_in_directory
 set err=%ERRORLEVEL%
 call :exec cd ..
+if %err% equ 0 set err=%ERRORLEVEL%
+:test_no_cd
 set CALL_STAT1=%CALL_STAT%
 endlocal & set /A "CALL_STAT+=%CALL_STAT1%" & exit /b %err%
 
-:tests_in
+:tests_in_directory
+call :execq "set AWKPATH=." || exit /b
+call :basic_tests           || exit /b
+call :ext_tests             || exit /b
+exit /b
 
-call :execq "set AWKPATH=."
-
+:basic_tests
 :: 262 basic tests
 
 call :runtest_in addcomma || exit /b
@@ -153,8 +162,8 @@ call :runtest_in anchor   || exit /b
 
 call :execq "copy argarray.in argarray.input > NUL" || exit /b
 call :execq "echo just a test | ..\gawk.exe -f argarray.awk ./argarray.input - > _argarray" || exit /b
-call :exec del /q argarray.input
 call :cmpdel argarray                               || exit /b
+call :exec del /q argarray.input
 
 call :runtest_in      arrayind1                         || exit /b
 call :runtest         arrayind2                         || exit /b
@@ -183,9 +192,9 @@ call :runtest         arysubnm                          || exit /b
 call :runtest         aryunasgn                         || exit /b
 call :runtest_in      asgext                            || exit /b
 
-call :execq "set AWKPATH=lib"
+call :execq "set AWKPATH=lib"                           || exit /b
 call :runtest         awkpath                           || exit /b
-call :execq "set AWKPATH=."
+call :execq "set AWKPATH=."                             || exit /b
 
 call :runtest_in      assignnumfield                          || exit /b
 call :runtest         assignnumfield2                         || exit /b
@@ -442,6 +451,31 @@ call :runtest_in      wjposer1                                || exit /b
 call :runtest         zero2                                   || exit /b
 call :runtest         zeroe0                                  || exit /b
 call :runtest         zeroflag                                || exit /b
+
+exit /b
+
+:ext_tests
+:: test extensions
+
+call :runtest_fail    aadelete1                               || exit /b
+call :runtest_fail    aadelete2                               || exit /b
+call :runtest         aarray1                                 || exit /b
+call :runtest         aasort                                  || exit /b
+call :runtest         aasorti                                 || exit /b
+call :runtest         argtest -x -y abc                       || exit /b
+call :runtest         arraysort                               || exit /b
+call :runtest         arraysort2                              || exit /b
+call :runtest         arraytype                               || exit /b
+call :runtest_in      backw                                   || exit /b
+
+call :execq "..\gawk.exe -f 2>&1 | find /v ""patchlevel"" > _badargs" && ^
+call :cmpdel badargs || exit /b
+
+call :execq "(echo x & echo y) > Xfile"                         || exit /b
+call :runtest beginfile1 beginfile1.awk . ./no/such/file Xfile  || exit /b
+call :exec del /q Xfile
+
+:: more tests to come...
 
 exit /b
 
