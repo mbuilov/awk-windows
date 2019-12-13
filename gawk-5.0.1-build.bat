@@ -475,6 +475,20 @@ call :execq "(echo x & echo y) > Xfile"                         || exit /b
 call :runtest beginfile1 beginfile1.awk . ./no/such/file Xfile  || exit /b
 call :exec del /q Xfile
 
+call :execq "set AWK=..\gawk.exe"                             || exit /b
+call :execq "cmd /c beginfile2.bat > _beginfile2 2>&1" && ^
+call :cmpdel beginfile2 || exit /b
+call :execq "set AWK="                                        || exit /b
+
+call :runtest_ binmode1 -v "BINMODE=3" """BEGIN { print BINMODE }"""  || exit /b
+
+:: BINMODE=2 is needed for PC tests.
+call :execq "..\gawk.exe -b -vBINMODE=2 -f charasbytes.awk charasbytes.in > _charasbytes1" || exit /b
+call :execq "echo 0000000000000000 > _charasbytes2"                                        || exit /b
+call :execq "fc /b _charasbytes1 _charasbytes2 | find ""0000"" > _charasbytes"             || exit /b
+call :cmpdel charasbytes                                                                   || exit /b
+call :exec del /q _charasbytes1 _charasbytes2
+
 :: more tests to come...
 
 exit /b
