@@ -202,6 +202,26 @@
 -BEGIN { "cat" | getline; print; close("cat") }
 +#BEGIN { "cat" | getline; print; close("cat") }
 +BEGIN { "find /v \"\"" | getline; print; close("find /v \"\"") }
+--- orig/gawk-5.0.1/test/clos1way2.awk	2018-12-23 23:01:42.000000000 +0300
++++ gawk-5.0.1/test/clos1way2.awk	2019-12-13 21:06:14.792008700 +0300
+@@ -1,6 +1,7 @@
+ {
+ 	# We use "&&" and not ";" so it works with Windows shells as well.
+-	cmd = "cat - 1>&2 && sleep 2"
++#	cmd = "cat - 1>&2 && sleep 2"
++	cmd = "find /v \"\" 1>&2 & ping -n 2 127.0.0.1 > NUL"
+ 	print |& cmd; close(cmd, "to")
+ 	fflush(cmd)
+ 	print |& cmd; print ERRNO
+--- orig/gawk-5.0.1/test/clos1way2.ok	2018-12-23 23:01:42.000000000 +0300
++++ gawk-5.0.1/test/clos1way2.ok	2019-12-13 21:09:29.651950900 +0300
+@@ -1,4 +1,4 @@
+-gawk: clos1way2.awk:5: (FILENAME=- FNR=1) warning: fflush: cannot flush: two-way pipe `cat - 1>&2 && sleep 2' has closed write end
++gawk: clos1way2.awk:6: (FILENAME=- FNR=1) warning: fflush: cannot flush: two-way pipe `find /v "" 1>&2 & ping -n 2 127.0.0.1 > NUL' has closed write end
+ test
+-gawk: clos1way2.awk:6: (FILENAME=- FNR=1) fatal: print: attempt to write to closed write end of two-way pipe
++gawk: clos1way2.awk:7: (FILENAME=- FNR=1) fatal: print: attempt to write to closed write end of two-way pipe
+ EXIT CODE: 2
 --- orig/gawk-5.0.1/test/exitval2.awk	2017-12-14 20:49:00.000000000 +0300
 +++ gawk-5.0.1/test/exitval2.awk	2019-12-11 16:53:54.706269500 +0300
 @@ -1,3 +1,4 @@

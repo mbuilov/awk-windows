@@ -489,6 +489,12 @@ call :execq "fc /b _charasbytes1 _charasbytes2 | find ""0000"" > _charasbytes"  
 call :cmpdel charasbytes                                                                   || exit /b
 call :exec del /q _charasbytes1 _charasbytes2
 
+call :execq "(for /L %%%%i in (1,1,3) do @..\gawk.exe -f colonwarn.awk %%%%i < colonwarn.in) > _colonwarn" && ^
+call :cmpdel colonwarn || exit /b
+
+call :runtest         clos1way                                || exit /b
+call :runtest_fail_in clos1way2                               || exit /b
+
 :: more tests to come...
 
 exit /b
