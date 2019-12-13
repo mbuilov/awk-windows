@@ -122,14 +122,14 @@
 +	"<NUL set /p\"=x\"" | getline
  }
 --- orig/gawk-5.0.1/test/rstest4.awk	2017-12-14 20:49:00.000000000 +0300
-+++ gawk-5.0.1/test/rstest4.awk	2019-12-13 10:47:02.150849000 +0300
++++ gawk-5.0.1/test/rstest4.awk	2019-12-13 11:21:50.591437800 +0300
 @@ -61,7 +61,8 @@
      while (("echo" | getline) == 1)
  	;
      RS = ""
 -    "echo \"a\n\nb\"" | getline y
 +#    "echo \"a\n\nb\"" | getline y
-+    "echo a\n\nb" | getline y
++    "echo.a&echo.&echo.b" | getline y
      printf "y = <%s>\n", y	# ADR
      printf "x = <%s>\n", x	# ADR
  }
