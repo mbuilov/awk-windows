@@ -494,6 +494,11 @@ call :cmpdel colonwarn || exit /b
 
 call :runtest         clos1way                                || exit /b
 call :runtest_fail_in clos1way2                               || exit /b
+call :runtest_fail    clos1way3                               || exit /b
+call :runtest_fail    clos1way4                               || exit /b
+call :runtest_fail    clos1way5                               || exit /b
+call :runtest         clos1way6                               || exit /b
+call :runtest         crlf                                    || exit /b
 
 :: more tests to come...
 
