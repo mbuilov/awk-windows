@@ -6,13 +6,13 @@ if 1==1 (
 :: release options
 set "CMNOPTS=/nologo /c /W4 %NODEPRECATE% /Ox /GF /Gy /GS- /GL /EHsc /we4013"
 set "GAWKLIB=lib /nologo /LTCG"
-set "GAWKLINK=link /nologo /LTCG /DEFAULTLIB:LIBCPMT.lib"
+set "GAWKLINK=link /nologo /LTCG /DEFAULTLIB:LIBCPMT.lib wsetargv.obj"
 set "EXTLINK=link /nologo /LTCG /DEFAULTLIB:LIBCPMT.lib /DLL /SUBSYSTEM:CONSOLE"
 ) else (
 :: debugging options
 set "CMNOPTS=/nologo /c /W4 %NODEPRECATE% /Od /Zi /EHsc /we4013 /D_DEBUG"
 set "GAWKLIB=lib /nologo"
-set "GAWKLINK=link /nologo /DEBUG /DEFAULTLIB:LIBCPMTD.lib"
+set "GAWKLINK=link /nologo /DEBUG /DEFAULTLIB:LIBCPMTD.lib wsetargv.obj"
 set "EXTLINK=link /nologo /DEBUG /DEFAULTLIB:LIBCPMTD.lib /DLL /SUBSYSTEM:CONSOLE"
 )
 
